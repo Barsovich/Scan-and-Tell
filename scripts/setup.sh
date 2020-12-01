@@ -92,13 +92,13 @@ python setup.py bdist_wheel
 cd dist
 pip install spconv-1.0-cp37-cp37m-linux_x86_64.whl
 
-# print_green 'Compile pointgroup_ops'
-# cd ../../pointgroup_ops/
-# conda install gxx_linux-64 --yes
-# conda install cudatoolkit=10.0 --yes
-# python setup.py build_ext --include-dirs=/usr/local/cuda-10.0/targets/x86_64-linux/include/:/usr/local/envs/scan-and-tell/include/:/usr/include/
-# python setup.py develop
-# exit_if_failed 'Failed to compile pointgroup_ops'
+print_green 'Compile pointgroup_ops'
+cd ../../pointgroup_ops/
+conda install gxx_linux-64 --yes
+conda install cudatoolkit=10.0 --yes
+python setup.py build_ext --include-dirs=/usr/local/cuda-10.0/targets/x86_64-linux/include/:/usr/local/envs/scan-and-tell/include/
+python setup.py develop
+exit_if_failed 'Failed to compile pointgroup_ops'
 
 # Done!
 print_done_message 'Setup succeeded.'
