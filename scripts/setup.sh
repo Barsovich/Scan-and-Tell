@@ -21,64 +21,64 @@ print_green 'Update the apt package index'
 sudo apt-get --assume-yes update
 exit_if_failed 'Updating the apt package index failed.'
 
-# print_green 'Install git'
-# sudo apt-get --assume-yes install git
-# exit_if_failed 'Installing git failed.'
+print_green 'Install git'
+sudo apt-get --assume-yes install git
+exit_if_failed 'Installing git failed.'
 
-# print_green 'Clone the Scan and Tell repository, you might be asked for GitHub credentials.'
-# git clone https://github.com/Barsovich/Scan-and-Tell.git
-# exit_if_failed 'Cloning the GitHub repository failed.'
+print_green 'Clone the Scan and Tell repository, you might be asked for GitHub credentials.'
+git clone https://github.com/Barsovich/Scan-and-Tell.git
+exit_if_failed 'Cloning the GitHub repository failed.'
 
-# # This step of the installer follows the tutorial at https://towardsdatascience.com/conda-google-colab-75f7c867a522
-# print_green 'Install conda'
-# ## unset PYTHONPATH # This is required since it may cause problems during the installation.
-# MINICONDA_INSTALLER_SCRIPT=Miniconda3-py37_4.9.2-Linux-x86_64.sh
-# MINICONDA_PREFIX=/usr/local
-# wget https://repo.continuum.io/miniconda/$MINICONDA_INSTALLER_SCRIPT
-# exit_if_failed 'Downloading conda failed.'
+# This step of the installer follows the tutorial at https://towardsdatascience.com/conda-google-colab-75f7c867a522
+print_green 'Install conda'
+## unset PYTHONPATH # This is required since it may cause problems during the installation.
+MINICONDA_INSTALLER_SCRIPT=Miniconda3-py37_4.9.2-Linux-x86_64.sh
+MINICONDA_PREFIX=/usr/local
+wget https://repo.continuum.io/miniconda/$MINICONDA_INSTALLER_SCRIPT
+exit_if_failed 'Downloading conda failed.'
 
-# chmod +x $MINICONDA_INSTALLER_SCRIPT
-# ./$MINICONDA_INSTALLER_SCRIPT -b -f -p $MINICONDA_PREFIX
-# exit_if_failed 'Installing conda failed.'
+chmod +x $MINICONDA_INSTALLER_SCRIPT
+./$MINICONDA_INSTALLER_SCRIPT -b -f -p $MINICONDA_PREFIX
+exit_if_failed 'Installing conda failed.'
 
-# print_green 'Update conda'
-# conda install --channel defaults conda python=3.7.0 --yes
-# conda update --channel defaults --all --yes
-# exit_if_failed 'Updating conda failed'
+print_green 'Update conda'
+conda install --channel defaults conda python=3.7.0 --yes
+conda update --channel defaults --all --yes
+exit_if_failed 'Updating conda failed'
 
-# print_green 'Final conda and python versions:'
-# conda --version
-# python --version
+print_green 'Final conda and python versions:'
+conda --version
+python --version
 
-# # TODO: Make sure that the following command adds the directory to the
-# #       path. We might need to call 'source ~/.bashrc' or similar.
-# print_green 'Add conda module directory to the path'
-# if ['$PYTHONPATH' == '']
-# then
-#     export PYTHONPATH="/usr/local/bin/python"
-# else
-#     export PYTHONPATH="$PYTHONPATH:/usr/local/bin/python"
-# fi
+# TODO: Make sure that the following command adds the directory to the
+#       path. We might need to call 'source ~/.bashrc' or similar.
+print_green 'Add conda module directory to the path'
+if ['$PYTHONPATH' == '']
+then
+    export PYTHONPATH="/usr/local/bin/python"
+else
+    export PYTHONPATH="$PYTHONPATH:/usr/local/bin/python"
+fi
 
-# print_green 'Create and source virtual environment'
-# conda create -n scan-and-tell python==3.7.0 --yes
+print_green 'Create and source virtual environment'
+conda create -n scan-and-tell python==3.7.0 --yes
 source activate scan-and-tell
 
-# print_green '--------- Install PointGroup ---------'
-# print_green 'Clone PointGroup repository'
-# # POINTGROUPDIR = '$SCRIPT_DIR/PointGroup'
-# git clone https://github.com/llijiang/PointGroup.git --recursive 
-# exit_if_failed 'Cloning PointGroup repository failed.'
+print_green '--------- Install PointGroup ---------'
+print_green 'Clone PointGroup repository'
+# POINTGROUPDIR = '$SCRIPT_DIR/PointGroup'
+git clone https://github.com/llijiang/PointGroup.git --recursive 
+exit_if_failed 'Cloning PointGroup repository failed.'
 
-# print_green 'Install required modules'
+print_green 'Install required modules'
 
-# # Change requirement to pytorch 1.2
-# sed -i 's/torch==1.1/torch==1.2/' PointGroup/requirements.txt
+# Change requirement to pytorch 1.2
+sed -i 's/torch==1.1/torch==1.2/' PointGroup/requirements.txt
 
-# pip install -r PointGroup/requirements.txt
-# exit_if_failed 'Installing requirements.txt failed.'
-# conda install -c bioconda google-sparsehash --yes
-# exit_if_failed 'Installing google-sparsehash failed.'
+pip install -r PointGroup/requirements.txt
+exit_if_failed 'Installing requirements.txt failed.'
+conda install -c bioconda google-sparsehash --yes
+exit_if_failed 'Installing google-sparsehash failed.'
 
 print_green 'Compile sparseconv'
 conda install libboost --yes
