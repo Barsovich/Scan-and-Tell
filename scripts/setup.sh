@@ -100,5 +100,10 @@ python setup.py build_ext --include-dirs=/usr/local/cuda-10.0/targets/x86_64-lin
 python setup.py develop
 exit_if_failed 'Failed to compile pointgroup_ops'
 
+print_green 'Installing PointNet++'
+cd ~/Scan-and-Tell/lib/pointnet2
+python setup.py build_ext --include-dirs=/usr/local/cuda-10.0/targets/x86_64-linux/include/
+python setup.py install
+
 # Done!
 print_done_message 'Setup succeeded.'
