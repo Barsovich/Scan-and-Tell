@@ -2,15 +2,13 @@
 # Script for setting up a Colab virtual machine from scratch
 
 # Assumptions: 
-# - CUDA 10.1 is already installed which is the current state of Colab
+# - CUDA 10.{0, 1} is already installed which is the current state of Colab
 
 # Get the absolute path to the directory containing this script. Source: https://stackoverflow.com/a/246128.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Include common functions and constants.
 source "${SCRIPT_DIR}"/common.sh
-
-USAGE='Usage: bash provision.sh [github-credential]'
 
 # Hack to make the script ask for sudo password before printing any steps.
 sudo printf ''
@@ -65,17 +63,14 @@ conda create -n scan-and-tell python==3.7.0 --yes
 source activate scan-and-tell
 
 print_green '--------- Install PointGroup ---------'
-print_green 'Clone PointGroup repository'
-# POINTGROUPDIR = '$SCRIPT_DIR/PointGroup'
-git clone https://github.com/llijiang/PointGroup.git --recursive 
-exit_if_failed 'Cloning PointGroup repository failed.'
+
+cd Scan-and-Tell/lib
 
 print_green 'Install required modules'
-
 # Change requirement to pytorch 1.2
-sed -i 's/torch==1.1/torch==1.2/' PointGroup/requirements.txt
+sed -i 's/torch==1.1/torch==1.2/' pointgroup/requirements.txt
 
-pip install -r PointGroup/requirements.txt
+pip install -r pointgroup/requirements.txt
 exit_if_failed 'Installing requirements.txt failed.'
 conda install -c bioconda google-sparsehash --yes
 exit_if_failed 'Installing google-sparsehash failed.'
@@ -85,9 +80,9 @@ conda install libboost --yes
 exit_if_failed 'Installing libboost failed.'
 conda install gcc_linux-64 --yes # conda install -c daleydeng gcc-5 fails.
 exit_if_failed 'Installing gcc-5 failed.'
-sed -i '5i\\ninclude_directories(/usr/include/boost)\n' PointGroup/lib/spconv/CMakeLists.txt
+sed -i '5i\\ninclude_directories(/usr/include/boost)\n' pointgroup/lib/spconv/CMakeLists.txt
 exit_if_failed 'Adding boost to the CMakeLists.txt failed.'
-cd PointGroup/lib/spconv
+cd pointgroup/lib/spconv
 python setup.py bdist_wheel
 cd dist
 pip install spconv-1.0-cp37-cp37m-linux_x86_64.whl
@@ -98,12 +93,18 @@ conda install gxx_linux-64 --yes
 conda install cudatoolkit=10.0 --yes
 python setup.py build_ext --include-dirs=/usr/local/cuda-10.0/targets/x86_64-linux/include/:/usr/local/envs/scan-and-tell/include/
 python setup.py develop
-exit_if_failed 'Failed to compile pointgroup_ops'
+exit_if_failed 'Failed to compile pointgroup_ops.'
 
-print_green 'Installing PointNet++'
-cd ~/Scan-and-Tell/lib/pointnet2
+print_green '--------- Install VoteNet ---------'
+print_green 'Install required modules'
+pip install matplotlib opencv-python plyfile 'trimesh>=2.35.39,<2.35.40' 'networkx>=2.2,<2.3'
+exit_if_failed 'Failed to install required modules.'
+
+print_green 'Compile PointNet2'
+cd ~/Scan-and-Tell/lib/votenet/pointnet2
 python setup.py build_ext --include-dirs=/usr/local/cuda-10.0/targets/x86_64-linux/include/
 python setup.py install
+exit_if_failed 'Failed to compile PointNet2.'
 
 # Done!
 print_done_message 'Setup succeeded.'

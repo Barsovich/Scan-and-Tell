@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 # Source: https://github.com/BugSwarm/bugswarm/blob/master/common.sh
 
