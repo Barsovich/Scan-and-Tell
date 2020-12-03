@@ -1,6 +1,0 @@
-[submodule "lib/pointgroup"]
-	path = lib/pointgroup
-	url = https://github.com/Jia-Research-Lab/PointGroup.git
-[submodule "lib/votenet"]
-	path = lib/votenet
-	url = https://github.com/facebookresearch/votenet.git
