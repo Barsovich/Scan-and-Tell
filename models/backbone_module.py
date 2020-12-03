@@ -6,7 +6,7 @@ import sys
 import os
 
 sys.path.append(os.path.join(os.getcwd(), "lib")) # HACK add the lib folder
-from lib.pointnet2.pointnet2_modules import PointnetSAModuleVotes, PointnetFPModule
+from lib.votenet.pointnet2.pointnet2_modules import PointnetSAModuleVotes, PointnetFPModule
 
 class Pointnet2Backbone(nn.Module):
     r"""
