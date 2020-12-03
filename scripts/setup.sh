@@ -24,7 +24,7 @@ sudo apt-get --assume-yes install git
 exit_if_failed 'Installing git failed.'
 
 print_green 'Clone the Scan and Tell repository, you might be asked for GitHub credentials.'
-git clone https://github.com/Barsovich/Scan-and-Tell.git
+git clone --recurse-submodules https://github.com/Barsovich/Scan-and-Tell.git
 exit_if_failed 'Cloning the GitHub repository failed.'
 
 # This step of the installer follows the tutorial at https://towardsdatascience.com/conda-google-colab-75f7c867a522
