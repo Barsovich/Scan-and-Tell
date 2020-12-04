@@ -76,7 +76,16 @@ def export_one_scan(model, scan_name, output_filename_prefix):
 
         TEST_SCAN_NAMES = sorted([line.rstrip() for line in open('meta_data/scannetv2_test.txt')])
 
-        if (scan_name not in TEST_SCAN_NAMES):
+        if (scan_name in TEST_SCAN_NAMES):
+
+            vertices = scannet_utils.read_mesh_vertices_rgb(mesh_file)
+            coords = np.ascontiguousarray(vertices[:, :3] - vertices[:, :3].mean(0))
+            colors = np.ascontiguousarray(vertices[:, 3:6]) / 127.5 - 1
+            
+            torch.save((coords, colors), output_filename_prefix + '_pointgroup.pth')
+            
+
+        else:
             labels_file = os.path.join(SCANNET_DIR, scan_name, scan_name + '_vh_clean_2.labels.ply')
             agg_file = os.path.join(SCANNET_DIR, scan_name, scan_name + '.aggregation.json')
 
@@ -94,12 +103,6 @@ def export_one_scan(model, scan_name, output_filename_prefix):
 
             torch.save((coords, colors, sem_labels), output_filename_prefix + '_pointgroup.pth') ##add instance_labels in save()
 
-        else:
-            vertices = scannet_utils.read_mesh_vertices_rgb(mesh_file)
-            coords = np.ascontiguousarray(vertices[:, :3] - vertices[:, :3].mean(0))
-            colors = np.ascontiguousarray(vertices[:, 3:6]) / 127.5 - 1
-            
-            torch.save((coords, colors), output_filename_prefix + '_pointgroup.pth')
 
 def batch_export():
     if not os.path.exists(OUTPUT_FOLDER):
