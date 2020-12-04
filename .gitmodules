@@ -1,0 +1,4 @@
+[submodule "lib/pointgroup/lib/spconv"]
+	path = lib/pointgroup/lib/spconv
+	url = https://github.com/llijiang/spconv.git
+	branch = master
