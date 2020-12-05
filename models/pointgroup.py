@@ -10,10 +10,10 @@ from spconv.modules import SparseModule
 import functools
 from collections import OrderedDict
 import sys
-#sys.path.append('../../')
+sys.path.append('../')
 
-sys.path.append(os.path.join(os.getcwd(), "lib")) # HACK add the lib folder
-from lib.pointgroup.lib.pointgroup_ops.functions import pointgroup_ops
+#sys.path.append(os.path.join(os.getcwd(), "lib")) # HACK add the lib folder
+from lib.pointgroup_ops.functions import pointgroup_ops
 from util import utils
 
 class ResidualBlock(SparseModule):
