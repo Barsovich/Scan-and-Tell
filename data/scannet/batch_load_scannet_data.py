@@ -11,6 +11,7 @@ from load_scannet_data import export, read_segmentation
 import pdb
 import argparse 
 import scannet_utils
+import torch
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model', help='3D backbone (votenet / pointgroup)', default='votenet')
