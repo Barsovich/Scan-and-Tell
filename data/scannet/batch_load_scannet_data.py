@@ -95,13 +95,22 @@ def export_one_scan(model, scan_name, output_filename_prefix):
 
             sem_labels = scannet_utils.get_labels(labels_file,OBJ_CLASS_IDS)
 
-            segid_to_pointid,_ = read_segmentation(seg_file)
+            segid_to_pointid, _ = read_segmentation(seg_file)
 
             #TBD - processing agg_file
 
-            #instance_labes=
+            instance_segids = scannet_utils.get_instance_segids(scan_name, agg_file)
 
-            torch.save((coords, colors, sem_labels), output_filename_prefix + '_pointgroup.pth') ##add instance_labels in save()
+            instance_labels = np.ones(sem_labels.shape[0]) * -100
+            for i in range(len(instance_segids)):
+                segids = instance_segids[i]
+                pointids = []
+                for segid in segids:
+                    pointids += segid_to_pointid[segid]
+                instance_labels[pointids] = i
+                assert(len(np.unique(sem_labels[pointids])) == 1)
+
+            torch.save((coords, colors, sem_labels, instance_labels), output_filename_prefix + '_pointgroup.pth')
 
 
 def batch_export():

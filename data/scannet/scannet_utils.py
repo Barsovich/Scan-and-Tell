@@ -153,6 +153,23 @@ def get_raw2scannetv2_label_map():
 
 g_raw2scannetv2 = get_raw2scannetv2_label_map()
 
+def get_instance_segids(scan_name, aggregation_file):
+    instance_segids = []
+    labels = []
+    with open(aggregation_file) as jsondata:
+        d = json.load(jsondata)
+        for x in d['segGroups']:
+            if g_raw2scannetv2[x['label']] != 'wall' and g_raw2scannetv2[x['label']] != 'floor':
+                instance_segids.append(x['segments'])
+                labels.append(x['label'])
+                assert(x['label'] in g_raw2scannetv2.keys())
+    if(scan_name == 'scene0217_00' and instance_segids[0] == instance_segids[int(len(instance_segids) / 2)]):
+        instance_segids = instance_segids[: int(len(instance_segids) / 2)]
+    check = []
+    for i in range(len(instance_segids)): check += instance_segids[i]
+    assert len(np.unique(check)) == len(check)
+    return instance_segids
+
 
 
 
