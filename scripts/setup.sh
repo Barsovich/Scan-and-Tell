@@ -62,15 +62,9 @@ print_green 'Create and source virtual environment'
 conda create -n scan-and-tell python==3.7.0 --yes
 source activate scan-and-tell
 
-print_green '--------- Install PointGroup ---------'
-
-cd Scan-and-Tell/lib
-
+cd Scan-and-Tell
 print_green 'Install required modules'
-# Change requirement to pytorch 1.2
-sed -i 's/torch==1.1/torch==1.2/' pointgroup/requirements.txt
-
-pip install -r pointgroup/requirements.txt
+pip install -r requirements.txt
 exit_if_failed 'Installing requirements.txt failed.'
 conda install -c bioconda google-sparsehash --yes
 exit_if_failed 'Installing google-sparsehash failed.'
@@ -80,9 +74,9 @@ conda install libboost --yes
 exit_if_failed 'Installing libboost failed.'
 conda install gcc_linux-64 --yes # conda install -c daleydeng gcc-5 fails.
 exit_if_failed 'Installing gcc-5 failed.'
-sed -i '5i\\ninclude_directories(/usr/include/boost)\n' pointgroup/lib/spconv/CMakeLists.txt
+sed -i '5i\\ninclude_directories(/usr/include/boost)\n' lib/spconv/CMakeLists.txt
 exit_if_failed 'Adding boost to the CMakeLists.txt failed.'
-cd pointgroup/lib/spconv
+cd lib/spconv
 python setup.py bdist_wheel
 cd dist
 pip install spconv-1.0-cp37-cp37m-linux_x86_64.whl
@@ -95,13 +89,13 @@ python setup.py build_ext --include-dirs=/usr/local/cuda-10.0/targets/x86_64-lin
 python setup.py develop
 exit_if_failed 'Failed to compile pointgroup_ops.'
 
-print_green '--------- Install VoteNet ---------'
+print_green '--------- Install PointNet2 ---------'
 print_green 'Install required modules'
 pip install matplotlib opencv-python plyfile 'trimesh>=2.35.39,<2.35.40' 'networkx>=2.2,<2.3'
 exit_if_failed 'Failed to install required modules.'
 
 print_green 'Compile PointNet2'
-cd ~/Scan-and-Tell/lib/votenet/pointnet2
+cd ~/Scan-and-Tell/lib/pointnet2
 python setup.py build_ext --include-dirs=/usr/local/cuda-10.0/targets/x86_64-linux/include/
 python setup.py install
 exit_if_failed 'Failed to compile PointNet2.'

@@ -1,2 +1,7 @@
 tensorboardX
 matplotlib
+torch==1.2
+cmake>=3.13.2
+plyfile
+pyyaml
+scipy
