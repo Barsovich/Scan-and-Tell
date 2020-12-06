@@ -6,5 +6,7 @@ chmod +x setup.sh
 cd Scan-and-Tell
 source activate scan-and-tell
 chmod +x scripts/download_data.sh
-./scripts/download_data.sh
-python data/scannet/batch_load_scannet_data.py --model $1
+cd scripts
+./download_data.sh
+cd ../data/scannet
+python batch_load_scannet_data.py --model $1
