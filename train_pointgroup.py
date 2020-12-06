@@ -163,8 +163,8 @@ if __name__ == '__main__':
     ##### dataset
     if cfg.dataset == 'scannet_data':
         if data_name == 'scannet':
-            import data.scannetv2_inst
-            dataset = data.scannetv2_inst.Dataset()
+            import data.dataset_pointgroup
+            dataset = data.dataset_pointgroup.Dataset()
             dataset.trainLoader()
             dataset.valLoader()
         else:

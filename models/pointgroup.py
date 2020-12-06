@@ -323,7 +323,7 @@ class PointGroup(nn.Module):
 
 def model_fn_decorator(test=False):
     #### config
-    from util.config import cfg
+    from config.config_pointgroup import cfg
 
     #### criterion
     semantic_criterion = nn.CrossEntropyLoss(ignore_index=cfg.ignore_label).cuda()
