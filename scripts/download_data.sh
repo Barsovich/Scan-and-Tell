@@ -1,7 +1,7 @@
 source activate scan-and-tell
 pip install gdown
 cd ../data/scannet
-gdown https://drive.google.com/uc?id=1zi6TBiVTqXaMJv28eDmKUtviA-mipZUb
+gdown https://drive.google.com/uc?id=1C69dzu0a3tt7IY1mU9GpIkXO5JHr-gHc
 tar -xf scans_small.tar.gz
 rm scans_small.tar.gz
 mv scans_small scans
