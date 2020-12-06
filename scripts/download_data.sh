@@ -1,6 +1,6 @@
 pip install gdown
 cd ../data/scannet
-gdown https://drive.google.com/uc?id=11I5dQQSuEqEUz1f76jcZ9hR9RcB6aNjI
+gdown https://drive.google.com/uc?id=1zi6TBiVTqXaMJv28eDmKUtviA-mipZUb
 tar -xf scans_small.tar.gz
 rm scans_small.tar.gz
 mv scans_small scans
