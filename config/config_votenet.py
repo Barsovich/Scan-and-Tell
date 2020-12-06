@@ -23,10 +23,10 @@ CONF.PATH.SCANNET_META = os.path.join(CONF.PATH.SCANNET, "meta_data")
 CONF.PATH.SCANNET_DATA = os.path.join(CONF.PATH.SCANNET, "scannet_data")
 
 # data
-CONF.SCANNET_DIR =  "/mnt/canis/Datasets/ScanNet/public/v2/scans" # TODO change this
-CONF.SCANNET_FRAMES_ROOT = "/home/davech2y/frames_square/" # TODO change this
-CONF.PROJECTION = "/home/davech2y/multiview_projection_scanrefer" # TODO change this
-CONF.ENET_FEATURES_ROOT = "/home/davech2y/enet_features" # TODO change this
+CONF.SCANNET_DIR =  os.path.join(CONF.PATH.SCANNET, "scans") # TODO This should be different than SCANNET_SCANS
+CONF.SCANNET_FRAMES_ROOT = os.path.join(CONF.PATH.SCANNET, "frames_square") # TODO change this
+CONF.PROJECTION = os.path.join(CONF.PATH.SCANNET, "multiview_projection_scanrefer") # TODO change this
+CONF.ENET_FEATURES_ROOT = os.path.join(CONF.PATH.SCANNET, "enet_features") # TODO change this
 CONF.ENET_FEATURES_SUBROOT = os.path.join(CONF.ENET_FEATURES_ROOT, "{}") # scene_id
 CONF.ENET_FEATURES_PATH = os.path.join(CONF.ENET_FEATURES_SUBROOT, "{}.npy") # frame_id
 CONF.SCANNET_FRAMES = os.path.join(CONF.SCANNET_FRAMES_ROOT, "{}/{}") # scene_id, mode 

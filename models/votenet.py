@@ -4,17 +4,15 @@ import numpy as np
 import sys
 import os
 
-sys.path.append(os.path.join(os.getcwd(), "lib")) # HACK add the lib folder
+sys.path.append('../') # HACK add the root folder
 from models.backbone_module import Pointnet2Backbone
 from models.voting_module import VotingModule
 from models.proposal_module import ProposalModule
-from models.lang_module import LangModule
-from models.match_module import MatchModule
 
 class RefNet(nn.Module):
     def __init__(self, num_class, num_heading_bin, num_size_cluster, mean_size_arr, 
-    input_feature_dim=0, num_proposal=128, vote_factor=1, sampling="vote_fps",
-    use_lang_classifier=True, use_bidir=False, no_reference=False,
+    input_feature_dim=0, num_proposal=128, vote_factor=1, sampling="vote_fps", 
+    use_bidir=False, no_caption=True,
     emb_size=300, hidden_size=256):
         super().__init__()
 
@@ -27,9 +25,8 @@ class RefNet(nn.Module):
         self.num_proposal = num_proposal
         self.vote_factor = vote_factor
         self.sampling = sampling
-        self.use_lang_classifier = use_lang_classifier
         self.use_bidir = use_bidir      
-        self.no_reference = no_reference
+        self.no_caption = no_caption
 
 
         # --------- PROPOSAL GENERATION ---------
@@ -42,15 +39,9 @@ class RefNet(nn.Module):
         # Vote aggregation and object proposal
         self.proposal = ProposalModule(num_class, num_heading_bin, num_size_cluster, mean_size_arr, num_proposal, sampling)
 
-        if not no_reference:
-            # --------- LANGUAGE ENCODING ---------
-            # Encode the input descriptions into vectors
-            # (including attention and language classification)
-            self.lang = LangModule(num_class, use_lang_classifier, use_bidir, emb_size, hidden_size)
-
-            # --------- PROPOSAL MATCHING ---------
-            # Match the generated proposals and select the most confident ones
-            self.match = MatchModule(num_proposals=num_proposal, lang_size=(1 + int(self.use_bidir)) * hidden_size)
+        if not no_caption:
+            # TODO: Add the description modules here
+            pass
 
     def forward(self, data_dict):
         """ Forward pass of the network
@@ -58,8 +49,7 @@ class RefNet(nn.Module):
         Args:
             data_dict: dict
                 {
-                    point_clouds, 
-                    lang_feat
+                    point_clouds
                 }
 
                 point_clouds: Variable(torch.cuda.FloatTensor)
@@ -96,23 +86,12 @@ class RefNet(nn.Module):
         # --------- PROPOSAL GENERATION ---------
         data_dict = self.proposal(xyz, features, data_dict)
 
-        if not self.no_reference:
-            #######################################
-            #                                     #
-            #           LANGUAGE BRANCH           #
-            #                                     #
-            #######################################
+        #######################################
+        #                                     #
+        #           CAPTIONIN BRANCH          #
+        #                                     #
+        #######################################
 
-            # --------- LANGUAGE ENCODING ---------
-            data_dict = self.lang(data_dict)
-
-            #######################################
-            #                                     #
-            #          PROPOSAL MATCHING          #
-            #                                     #
-            #######################################
-
-            # --------- PROPOSAL MATCHING ---------
-            data_dict = self.match(data_dict)
+        # TODO Implement Captioning
 
         return data_dict

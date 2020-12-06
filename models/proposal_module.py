@@ -9,9 +9,9 @@ import numpy as np
 import os
 import sys
 
-sys.path.append(os.path.join(os.getcwd(), "lib")) # HACK add the lib folder
-import lib.votenet.pointnet2.pointnet2_utils
-from lib.votenet.pointnet2.pointnet2_modules import PointnetSAModuleVotes
+sys.path.append('../') # HACK add the root folder
+import lib.pointnet2.pointnet2_utils
+from lib.pointnet2.pointnet2_modules import PointnetSAModuleVotes
 
 class ProposalModule(nn.Module):
     def __init__(self, num_class, num_heading_bin, num_size_cluster, mean_size_arr, num_proposal, sampling, seed_feat_dim=256):

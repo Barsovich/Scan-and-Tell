@@ -13,8 +13,8 @@ from tensorboardX import SummaryWriter
 from torch.optim.lr_scheduler import StepLR, MultiStepLR
 
 
-sys.path.append(os.path.join(os.getcwd(), "lib")) # HACK add the lib folder
-from lib.config import CONF
+sys.path.append('../') # HACK add the root folder
+from config.config_votenet import CONF
 from lib.loss_helper import get_loss
 from lib.eval_helper import get_eval
 from utils.eta import decode_eta

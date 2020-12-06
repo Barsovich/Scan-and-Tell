@@ -13,8 +13,8 @@ import numpy as np
 import multiprocessing as mp
 from torch.utils.data import Dataset
 
-sys.path.append(os.path.join(os.getcwd(), "lib")) # HACK add the lib folder
-from lib.config import CONF
+sys.path.append('../') # HACK add the root folder
+from config.config_votenet import CONF
 from utils.pc_utils import random_sampling, rotx, roty, rotz
 from data.scannet.model_util_scannet import rotate_aligned_boxes, ScannetDatasetConfig, rotate_aligned_boxes_along_axis
 
@@ -27,7 +27,6 @@ MEAN_COLOR_RGB = np.array([109.8, 97.2, 83.8])
 SCANNET_V2_TSV = os.path.join(CONF.PATH.SCANNET_META, "scannetv2-labels.combined.tsv")
 # MULTIVIEW_DATA = os.path.join(CONF.PATH.SCANNET_DATA, "enet_feats.hdf5")
 MULTIVIEW_DATA = CONF.MULTIVIEW
-GLOVE_PICKLE = os.path.join(CONF.PATH.DATA, "glove.p")
 
 class ScannetReferenceDataset(Dataset):
        
@@ -63,11 +62,6 @@ class ScannetReferenceDataset(Dataset):
         object_id = int(self.scanrefer[idx]["object_id"])
         object_name = " ".join(self.scanrefer[idx]["object_name"].split("_"))
         ann_id = self.scanrefer[idx]["ann_id"]
-        
-        # get language features
-        lang_feat = self.lang[scene_id][str(object_id)][ann_id]
-        lang_len = len(self.scanrefer[idx]["token"])
-        lang_len = lang_len if lang_len <= CONF.TRAIN.MAX_DES_LEN else CONF.TRAIN.MAX_DES_LEN
 
         # get pc
         mesh_vertices = self.scene_data[scene_id]["mesh_vertices"]
@@ -208,8 +202,6 @@ class ScannetReferenceDataset(Dataset):
 
         data_dict = {}
         data_dict["point_clouds"] = point_cloud.astype(np.float32) # point cloud data including features
-        data_dict["lang_feat"] = lang_feat.astype(np.float32) # language feature vectors
-        data_dict["lang_len"] = np.array(lang_len).astype(np.int64) # length of each description
         data_dict["center_label"] = target_bboxes.astype(np.float32)[:,0:3] # (MAX_NUM_OBJ, 3) for GT box center XYZ
         data_dict["heading_class_label"] = angle_classes.astype(np.int64) # (MAX_NUM_OBJ,) with int values in 0,...,NUM_HEADING_BIN-1
         data_dict["heading_residual_label"] = angle_residuals.astype(np.float32) # (MAX_NUM_OBJ,)
@@ -311,46 +303,9 @@ class ScannetReferenceDataset(Dataset):
 
         return unique_multiple_lookup
 
-    def _tranform_des(self):
-        with open(GLOVE_PICKLE, "rb") as f:
-            glove = pickle.load(f)
-
-        lang = {}
-        for data in self.scanrefer:
-            scene_id = data["scene_id"]
-            object_id = data["object_id"]
-            ann_id = data["ann_id"]
-
-            if scene_id not in lang:
-                lang[scene_id] = {}
-
-            if object_id not in lang[scene_id]:
-                lang[scene_id][object_id] = {}
-
-            if ann_id not in lang[scene_id][object_id]:
-                lang[scene_id][object_id][ann_id] = {}
-
-            # tokenize the description
-            tokens = data["token"]
-            embeddings = np.zeros((CONF.TRAIN.MAX_DES_LEN, 300))
-            for token_id in range(CONF.TRAIN.MAX_DES_LEN):
-                if token_id < len(tokens):
-                    token = tokens[token_id]
-                    if token in glove:
-                        embeddings[token_id] = glove[token]
-                    else:
-                        embeddings[token_id] = glove["unk"]
-
-            # store
-            lang[scene_id][object_id][ann_id] = embeddings
-
-        return lang
-
 
     def _load_data(self):
         print("loading data...")
-        # load language features
-        self.lang = self._tranform_des()
 
         # add scannet data
         self.scene_list = sorted(list(set([data["scene_id"] for data in self.scanrefer])))
