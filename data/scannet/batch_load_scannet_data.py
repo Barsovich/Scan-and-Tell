@@ -98,8 +98,6 @@ def export_one_scan(model, scan_name, output_filename_prefix):
 
             segid_to_pointid, _ = read_segmentation(seg_file)
 
-            #TBD - processing agg_file
-
             instance_segids = scannet_utils.get_instance_segids(scan_name, agg_file)
 
             instance_labels = np.ones(sem_labels.shape[0]) * -100
