@@ -17,7 +17,7 @@ def init():
     # copy important files to backup
     backup_dir = os.path.join(cfg.exp_path, 'backup_files')
     os.makedirs(backup_dir, exist_ok=True)
-    os.system('cp train.py {}'.format(backup_dir))
+    os.system('cp train_pointgroup.py {}'.format(backup_dir))
     os.system('cp {} {}'.format(cfg.model_dir, backup_dir))
     os.system('cp {} {}'.format(cfg.dataset_dir, backup_dir))
     os.system('cp {} {}'.format(cfg.config, backup_dir))

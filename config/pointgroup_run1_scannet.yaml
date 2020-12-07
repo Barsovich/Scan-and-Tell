@@ -9,7 +9,7 @@ DATA:
   dataset: scannet_data
   filename_suffix: _pointgroup.pth
 
-  classes: 20
+  classes: 37
   ignore_label: -100
 
   input_channel: 3
