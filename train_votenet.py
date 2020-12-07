@@ -13,12 +13,11 @@ from torch.utils.data import DataLoader
 from datetime import datetime
 from copy import deepcopy
 
-sys.path.append(os.path.join(os.getcwd())) # HACK add the root folder
 from data.scannet.model_util_scannet import ScannetDatasetConfig
-from lib.dataset import ScannetReferenceDataset
+from data.dataset_votenet import ScannetReferenceDataset
 from lib.solver import Solver
-from lib.config import CONF
-from models.refnet import RefNet
+from config.config_votenet import CONF
+from models.votenet import RefNet
 
 SCANREFER_TRAIN = json.load(open(os.path.join(CONF.PATH.DATA, "ScanRefer_filtered_train.json")))
 SCANREFER_VAL = json.load(open(os.path.join(CONF.PATH.DATA, "ScanRefer_filtered_val.json")))
@@ -52,9 +51,8 @@ def get_model(args):
         mean_size_arr=DC.mean_size_arr,
         input_feature_dim=input_channels,
         num_proposal=args.num_proposals,
-        use_lang_classifier=(not args.no_lang_cls),
         use_bidir=args.use_bidir,
-        no_reference=args.no_reference
+        no_caption=args.no_caption
     )
 
     # trainable model

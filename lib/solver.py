@@ -86,7 +86,7 @@ BEST_REPORT_TEMPLATE = """
 
 class Solver():
     def __init__(self, model, config, dataloader, optimizer, stamp, val_step=10, 
-    detection=True, reference=True, use_lang_classifier=True,
+    detection=True, caption=True, use_lang_classifier=True,
     lr_decay_step=None, lr_decay_rate=None, bn_decay_step=None, bn_decay_rate=None):
 
         self.epoch = 0                    # set in __call__
@@ -100,7 +100,8 @@ class Solver():
         self.val_step = val_step
 
         self.detection = detection
-        self.reference = reference
+        self.caption = caption
+
         self.use_lang_classifier = use_lang_classifier
 
         self.lr_decay_step = lr_decay_step
@@ -266,7 +267,9 @@ class Solver():
             data_dict=data_dict, 
             config=self.config, 
             detection=self.detection,
-            reference=self.reference, 
+            caption
+=self.caption
+, 
             use_lang_classifier=self.use_lang_classifier
         )
 
@@ -282,7 +285,7 @@ class Solver():
         data_dict = get_eval(
             data_dict=data_dict,
             config=self.config,
-            reference=self.reference,
+            caption=self.caption,
             use_lang_classifier=self.use_lang_classifier
         )
 

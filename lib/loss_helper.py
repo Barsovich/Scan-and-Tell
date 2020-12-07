@@ -185,7 +185,7 @@ def compute_box_and_sem_cls_loss(data_dict, config):
 
     return center_loss, heading_class_loss, heading_residual_normalized_loss, size_class_loss, size_residual_normalized_loss, sem_cls_loss
 
-def get_loss(data_dict, config, detection=True, caption=False):
+def get_loss(data_dict, config, detection=True, caption=False,use_lang_classifier=False):
     """ Loss functions
 
     Args:
@@ -236,14 +236,15 @@ def get_loss(data_dict, config, detection=True, caption=False):
         data_dict['box_loss'] = torch.zeros(1)[0].cuda()
 
     if caption:
-        pass
+        #pass
         # TODO
         # Reference loss
         # ref_loss, _, cluster_labels = compute_reference_loss(data_dict, config)
         # data_dict["cluster_labels"] = cluster_labels
         # data_dict["ref_loss"] = ref_loss
+        data_dict["ref_loss"] = torch.zeros(1)[0].cuda()
     else:
-        pass
+        #pass
         # TODO
         # # Reference loss
         # ref_loss, _, cluster_labels = compute_reference_loss(data_dict, config)
@@ -252,12 +253,14 @@ def get_loss(data_dict, config, detection=True, caption=False):
         # data_dict["cluster_ref"] = objectness_label.new_zeros(objectness_label.shape).float().cuda()
 
         # store
-        # data_dict["ref_loss"] = torch.zeros(1)[0].cuda()
+        data_dict["ref_loss"] = torch.zeros(1)[0].cuda()
+
 
     if caption:
-        pass
+        #pass
         # TODO
         # data_dict["lang_loss"] = compute_lang_classification_loss(data_dict)
+        data_dict['lang_loss'] = torch.zeros(1)[0].cuda()
     else:
         pass
         # TODO
@@ -265,7 +268,7 @@ def get_loss(data_dict, config, detection=True, caption=False):
 
     # Final loss function
     loss = data_dict['vote_loss'] + 0.5*data_dict['objectness_loss'] + data_dict['box_loss'] + 0.1*data_dict['sem_cls_loss'] \
-        # + 0.1*data_dict["ref_loss"] + 0.1*data_dict["lang_loss"]
+         + 0.1*data_dict["ref_loss"] + 0.1*data_dict["lang_loss"]
     
     loss *= 10 # amplify
 
