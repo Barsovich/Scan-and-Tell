@@ -5,3 +5,7 @@ cmake>=3.13.2
 plyfile
 pyyaml
 scipy
+torchvision==0.4.0
+imageio
+easydict
+h5py
