@@ -262,9 +262,9 @@ def get_loss(data_dict, config, detection=True, caption=False,use_lang_classifie
         # data_dict["lang_loss"] = compute_lang_classification_loss(data_dict)
         data_dict['lang_loss'] = torch.zeros(1)[0].cuda()
     else:
-        pass
+        #pass
         # TODO
-        # data_dict["lang_loss"] = torch.zeros(1)[0].cuda()
+        data_dict["lang_loss"] = torch.zeros(1)[0].cuda()
 
     # Final loss function
     loss = data_dict['vote_loss'] + 0.5*data_dict['objectness_loss'] + data_dict['box_loss'] + 0.1*data_dict['sem_cls_loss'] \

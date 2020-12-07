@@ -73,49 +73,52 @@ def get_eval(data_dict, config, reference, use_lang_classifier=False, use_oracle
         pred_masks = (objectness_preds_batch == 1).float()
         label_masks = (objectness_labels_batch == 1).float()
 
-    cluster_preds = torch.argmax(data_dict["cluster_ref"] * pred_masks, 1).long().unsqueeze(1).repeat(1, pred_masks.shape[1])
-    preds = torch.zeros(pred_masks.shape).cuda()
-    preds = preds.scatter_(1, cluster_preds, 1)
-    cluster_preds = preds
-    cluster_labels = data_dict["cluster_labels"].float()
-    cluster_labels *= label_masks
+    #cluster_preds = torch.argmax(data_dict["cluster_ref"] * pred_masks, 1).long().unsqueeze(1).repeat(1, pred_masks.shape[1])
+    #preds = torch.zeros(pred_masks.shape).cuda()
+    #preds = preds.scatter_(1, cluster_preds, 1)
+    #cluster_preds = preds
+    #cluster_labels = data_dict["cluster_labels"].float()
+    #cluster_labels *= label_masks
     
     # compute classification scores
-    corrects = torch.sum((cluster_preds == 1) * (cluster_labels == 1), dim=1).float()
-    labels = torch.ones(corrects.shape[0]).cuda()
-    ref_acc = corrects / (labels + 1e-8)
+    #corrects = torch.sum((cluster_preds == 1) * (cluster_labels == 1), dim=1).float()
+    #labels = torch.ones(corrects.shape[0]).cuda()
+    #ref_acc = corrects / (labels + 1e-8)
     
     # store
-    data_dict["ref_acc"] = ref_acc.cpu().numpy().tolist()
+    #data_dict["ref_acc"] = ref_acc.cpu().numpy().tolist()
 
     # compute localization metrics
     if use_best:
-        pred_ref = torch.argmax(data_dict["cluster_labels"], 1) # (B,)
+        pass
+    #    pred_ref = torch.argmax(data_dict["cluster_labels"], 1) # (B,)
         # store the calibrated predictions and masks
-        data_dict['cluster_ref'] = data_dict["cluster_labels"]
+    #    data_dict['cluster_ref'] = data_dict["cluster_labels"]
     if use_cat_rand:
-        cluster_preds = torch.zeros(cluster_labels.shape).cuda()
-        for i in range(cluster_preds.shape[0]):
-            num_bbox = data_dict["num_bbox"][i]
-            sem_cls_label = data_dict["sem_cls_label"][i]
+        pass
+    #    cluster_preds = torch.zeros(cluster_labels.shape).cuda()
+    #    for i in range(cluster_preds.shape[0]):
+    #        num_bbox = data_dict["num_bbox"][i]
+    #        sem_cls_label = data_dict["sem_cls_label"][i]
             # sem_cls_label = torch.argmax(end_points["sem_cls_scores"], 2)[i]
-            sem_cls_label[num_bbox:] -= 1
-            candidate_masks = torch.gather(sem_cls_label == data_dict["object_cat"][i], 0, data_dict["object_assignment"][i])
-            candidates = torch.arange(cluster_labels.shape[1])[candidate_masks]
-            try:
-                chosen_idx = torch.randperm(candidates.shape[0])[0]
-                chosen_candidate = candidates[chosen_idx]
-                cluster_preds[i, chosen_candidate] = 1
-            except IndexError:
-                cluster_preds[i, candidates] = 1
+    #        sem_cls_label[num_bbox:] -= 1
+    #        candidate_masks = torch.gather(sem_cls_label == data_dict["object_cat"][i], 0, data_dict["object_assignment"][i])
+    #        candidates = torch.arange(cluster_labels.shape[1])[candidate_masks]
+    #        try:
+    #            chosen_idx = torch.randperm(candidates.shape[0])[0]
+    #            chosen_candidate = candidates[chosen_idx]
+    #            cluster_preds[i, chosen_candidate] = 1
+    #        except IndexError:
+    #            cluster_preds[i, candidates] = 1
         
-        pred_ref = torch.argmax(cluster_preds, 1) # (B,)
+    #    pred_ref = torch.argmax(cluster_preds, 1) # (B,)
         # store the calibrated predictions and masks
-        data_dict['cluster_ref'] = cluster_preds
+    #    data_dict['cluster_ref'] = cluster_preds
     else:
-        pred_ref = torch.argmax(data_dict['cluster_ref'] * pred_masks, 1) # (B,)
+        pass
+    #    pred_ref = torch.argmax(data_dict['cluster_ref'] * pred_masks, 1) # (B,)
         # store the calibrated predictions and masks
-        data_dict['cluster_ref'] = data_dict['cluster_ref'] * pred_masks
+    #    data_dict['cluster_ref'] = data_dict['cluster_ref'] * pred_masks
 
     if use_oracle:
         pred_center = data_dict['center_label'] # (B,MAX_NUM_OBJ,3)
