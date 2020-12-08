@@ -42,7 +42,7 @@ def construct_bbox_corners(center, box_size):
 
     return corners_3d
 
-def get_eval(data_dict, config, reference, use_lang_classifier=False, use_oracle=False, use_cat_rand=False, use_best=False, post_processing=None):
+def get_eval(data_dict, config, caption, use_lang_classifier=False, use_oracle=False, use_cat_rand=False, use_best=False, post_processing=None):
     """ Loss functions
 
     Args:
@@ -100,60 +100,60 @@ def get_eval(data_dict, config, reference, use_lang_classifier=False, use_oracle
     gt_size_class = data_dict['size_class_label'] # B,K2
     gt_size_residual = data_dict['size_residual_label'] # B,K2,3
 
-    ious = []
-    multiple = []
-    others = []
-    pred_bboxes = []
-    gt_bboxes = []
-    for i in range(pred_ref.shape[0]):
-        # compute the iou
-        pred_ref_idx, gt_ref_idx = pred_ref[i], gt_ref[i]
-        pred_obb = config.param2obb(
-            pred_center[i, pred_ref_idx, 0:3].detach().cpu().numpy(), 
-            pred_heading_class[i, pred_ref_idx].detach().cpu().numpy(), 
-            pred_heading_residual[i, pred_ref_idx].detach().cpu().numpy(),
-            pred_size_class[i, pred_ref_idx].detach().cpu().numpy(), 
-            pred_size_residual[i, pred_ref_idx].detach().cpu().numpy()
-        )
-        gt_obb = config.param2obb(
-            gt_center[i, gt_ref_idx, 0:3].detach().cpu().numpy(), 
-            gt_heading_class[i, gt_ref_idx].detach().cpu().numpy(), 
-            gt_heading_residual[i, gt_ref_idx].detach().cpu().numpy(),
-            gt_size_class[i, gt_ref_idx].detach().cpu().numpy(), 
-            gt_size_residual[i, gt_ref_idx].detach().cpu().numpy()
-        )
-        pred_bbox = get_3d_box(pred_obb[3:6], pred_obb[6], pred_obb[0:3])
-        gt_bbox = get_3d_box(gt_obb[3:6], gt_obb[6], gt_obb[0:3])
-        iou = eval_ref_one_sample(pred_bbox, gt_bbox)
-        ious.append(iou)
+    # ious = []
+    # multiple = []
+    # others = []
+    # pred_bboxes = []
+    # gt_bboxes = []
+    # for i in range(pred_ref.shape[0]):
+    #     # compute the iou
+    #     pred_ref_idx, gt_ref_idx = pred_ref[i], gt_ref[i]
+    #     pred_obb = config.param2obb(
+    #         pred_center[i, pred_ref_idx, 0:3].detach().cpu().numpy(), 
+    #         pred_heading_class[i, pred_ref_idx].detach().cpu().numpy(), 
+    #         pred_heading_residual[i, pred_ref_idx].detach().cpu().numpy(),
+    #         pred_size_class[i, pred_ref_idx].detach().cpu().numpy(), 
+    #         pred_size_residual[i, pred_ref_idx].detach().cpu().numpy()
+    #     )
+    #     gt_obb = config.param2obb(
+    #         gt_center[i, gt_ref_idx, 0:3].detach().cpu().numpy(), 
+    #         gt_heading_class[i, gt_ref_idx].detach().cpu().numpy(), 
+    #         gt_heading_residual[i, gt_ref_idx].detach().cpu().numpy(),
+    #         gt_size_class[i, gt_ref_idx].detach().cpu().numpy(), 
+    #         gt_size_residual[i, gt_ref_idx].detach().cpu().numpy()
+    #     )
+    #     pred_bbox = get_3d_box(pred_obb[3:6], pred_obb[6], pred_obb[0:3])
+    #     gt_bbox = get_3d_box(gt_obb[3:6], gt_obb[6], gt_obb[0:3])
+    #     iou = eval_ref_one_sample(pred_bbox, gt_bbox)
+    #     ious.append(iou)
 
-        # NOTE: get_3d_box() will return problematic bboxes
-        pred_bbox = construct_bbox_corners(pred_obb[0:3], pred_obb[3:6])
-        gt_bbox = construct_bbox_corners(gt_obb[0:3], gt_obb[3:6])
-        pred_bboxes.append(pred_bbox)
-        gt_bboxes.append(gt_bbox)
+    #     # NOTE: get_3d_box() will return problematic bboxes
+    #     pred_bbox = construct_bbox_corners(pred_obb[0:3], pred_obb[3:6])
+    #     gt_bbox = construct_bbox_corners(gt_obb[0:3], gt_obb[3:6])
+    #     pred_bboxes.append(pred_bbox)
+    #     gt_bboxes.append(gt_bbox)
 
-        # construct the multiple mask
-        multiple.append(data_dict["unique_multiple"][i].item())
+    #     # construct the multiple mask
+    #     multiple.append(data_dict["unique_multiple"][i].item())
 
-        # construct the others mask
-        flag = 1 if data_dict["object_cat"][i] == 17 else 0
-        others.append(flag)
+    #     # construct the others mask
+    #     flag = 1 if data_dict["object_cat"][i] == 17 else 0
+    #     others.append(flag)
 
-    # lang
-    if reference and use_lang_classifier:
-        data_dict["lang_acc"] = (torch.argmax(data_dict['lang_scores'], 1) == data_dict["object_cat"]).float().mean()
-    else:
-        data_dict["lang_acc"] = torch.zeros(1)[0].cuda()
+    # # lang
+    # if caption and use_lang_classifier:
+    #     data_dict["lang_acc"] = (torch.argmax(data_dict['lang_scores'], 1) == data_dict["object_cat"]).float().mean()
+    # else:
+    #     data_dict["lang_acc"] = torch.zeros(1)[0].cuda()
 
-    # store
-    data_dict["ref_iou"] = ious
-    data_dict["ref_iou_rate_0.25"] = np.array(ious)[np.array(ious) >= 0.25].shape[0] / np.array(ious).shape[0]
-    data_dict["ref_iou_rate_0.5"] = np.array(ious)[np.array(ious) >= 0.5].shape[0] / np.array(ious).shape[0]
-    data_dict["ref_multiple_mask"] = multiple
-    data_dict["ref_others_mask"] = others
-    data_dict["pred_bboxes"] = pred_bboxes
-    data_dict["gt_bboxes"] = gt_bboxes
+    # # store
+    # data_dict["ref_iou"] = ious
+    # data_dict["ref_iou_rate_0.25"] = np.array(ious)[np.array(ious) >= 0.25].shape[0] / np.array(ious).shape[0]
+    # data_dict["ref_iou_rate_0.5"] = np.array(ious)[np.array(ious) >= 0.5].shape[0] / np.array(ious).shape[0]
+    # data_dict["ref_multiple_mask"] = multiple
+    # data_dict["ref_others_mask"] = others
+    # data_dict["pred_bboxes"] = pred_bboxes
+    # data_dict["gt_bboxes"] = gt_bboxes
 
     # --------------------------------------------
     # Some other statistics

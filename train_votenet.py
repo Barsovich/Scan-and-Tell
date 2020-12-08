@@ -67,7 +67,7 @@ def get_model(args):
             num_proposal=args.num_proposals,
             input_feature_dim=input_channels,
             use_bidir=args.use_bidir,
-            no_reference=True
+            no_caption=True
         )
 
         pretrained_path = os.path.join(CONF.PATH.OUTPUT, args.use_pretrained, "model_last.pth")
@@ -120,10 +120,10 @@ def get_solver(args, dataloader):
         os.makedirs(root, exist_ok=True)
 
     # scheduler parameters for training solely the detection pipeline
-    LR_DECAY_STEP = [80, 120, 160] if args.no_reference else None
-    LR_DECAY_RATE = 0.1 if args.no_reference else None
-    BN_DECAY_STEP = 20 if args.no_reference else None
-    BN_DECAY_RATE = 0.5 if args.no_reference else None
+    LR_DECAY_STEP = [80, 120, 160] if args.no_caption else None
+    LR_DECAY_RATE = 0.1 if args.no_caption else None
+    BN_DECAY_STEP = 20 if args.no_caption else None
+    BN_DECAY_RATE = 0.5 if args.no_caption else None
 
     solver = Solver(
         model=model, 
@@ -133,7 +133,7 @@ def get_solver(args, dataloader):
         stamp=stamp, 
         val_step=args.val_step,
         detection=not args.no_detection,
-        reference=not args.no_reference, 
+        caption=not args.no_caption, 
         use_lang_classifier=not args.no_lang_cls,
         lr_decay_step=LR_DECAY_STEP,
         lr_decay_rate=LR_DECAY_RATE,
@@ -164,7 +164,7 @@ def get_scannet_scene_list(split):
     return scene_list
 
 def get_scanrefer(scanrefer_train, scanrefer_val, num_scenes):
-    if args.no_reference:
+    if args.no_caption:
         train_scene_list = get_scannet_scene_list("train")
         new_scanrefer_train = []
         for scene_id in train_scene_list:
@@ -247,7 +247,7 @@ if __name__ == "__main__":
     parser.add_argument("--no_augment", action="store_true", help="Do NOT use height signal in input.")
     parser.add_argument("--no_lang_cls", action="store_true", help="Do NOT use language classifier.")
     parser.add_argument("--no_detection", action="store_true", help="Do NOT train the detection module.")
-    parser.add_argument("--no_reference", action="store_true", help="Do NOT train the localization module.")
+    parser.add_argument("--no_caption", action="store_true", help="Do NOT train the localization module.")
     parser.add_argument("--use_color", action="store_true", help="Use RGB color in input.")
     parser.add_argument("--use_normal", action="store_true", help="Use RGB color in input.")
     parser.add_argument("--use_multiview", action="store_true", help="Use multiview images.")
