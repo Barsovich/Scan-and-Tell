@@ -144,12 +144,10 @@ def get_raw2scannetv2_label_map():
         if (elements[1] != elements[2]):
             print('{}: {} {}'.format(i, elements[1], elements[2]))
         nyu40_name = elements[7]
-        nyu40_id = int(elements[4])
-        if nyu40_id in nyu40_ids:
-            if nyu40_name not in label_classes_set:
-                raw2scannet[raw_name] = 'others'
-            else:
-                raw2scannet[raw_name] = nyu40_name
+        if nyu40_name not in label_classes_set:
+            raw2scannet[raw_name] = 'others'
+        else:
+            raw2scannet[raw_name] = nyu40_name
     return raw2scannet
 
 g_raw2scannetv2 = get_raw2scannetv2_label_map()
