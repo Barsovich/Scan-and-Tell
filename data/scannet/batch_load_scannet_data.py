@@ -13,8 +13,11 @@ import argparse
 import scannet_utils
 import torch
 
+import shutil
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--model', help='3D backbone (votenet / pointgroup)', default='votenet')
+parser.add_argument('--delete_data',action='store_true',help='Delete raw data after processing')
 opt = parser.parse_args()
 
 model = opt.model
@@ -112,6 +115,18 @@ def export_one_scan(model, scan_name, output_filename_prefix):
             torch.save((coords, colors, sem_labels, instance_labels), output_filename_prefix + '_pointgroup.pth')
 
 
+def handler(func,path,exc_info):
+    print('Removing directory failed with error:')
+    print(exc_info)
+
+
+def delete_raw(scan_name,handler_func):
+    print('Deleting data...')
+    path = os.path.join(SCANNET_DIR,scan_name)
+    shutil.rmtree(path,onerror=handler_func)
+    print('Raw data deleted')
+
+
 def batch_export():
     if not os.path.exists(OUTPUT_FOLDER):
         print('Creating new data folder: {}'.format(OUTPUT_FOLDER))                
@@ -128,6 +143,10 @@ def batch_export():
         export_one_scan(model, scan_name, output_filename_prefix)
              
         print('-'*20+'done')
+
+        if (opt.delete_data):
+            delete_raw(scan_name,handler)
+
 
 if __name__=='__main__':    
     batch_export()
