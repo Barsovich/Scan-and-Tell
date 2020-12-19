@@ -10,3 +10,4 @@ imageio
 easydict
 h5py
 ipykernel
+"pillow<7"
