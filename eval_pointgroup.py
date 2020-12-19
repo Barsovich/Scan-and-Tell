@@ -21,14 +21,13 @@ def init():
     backup_dir = os.path.join(result_dir, 'backup_files')
     os.makedirs(backup_dir, exist_ok=True)
     os.makedirs(os.path.join(result_dir, 'predicted_masks'), exist_ok=True)
-    os.system('cp test.py {}'.format(backup_dir))
+    os.system('cp eval_pointgroup.py {}'.format(backup_dir))
     os.system('cp {} {}'.format(cfg.model_dir, backup_dir))
     os.system('cp {} {}'.format(cfg.dataset_dir, backup_dir))
     os.system('cp {} {}'.format(cfg.config, backup_dir))
 
     global semantic_label_idx
-    semantic_label_idx = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 24, 28, 33, 34, 36, 39]
-
+    semantic_label_idx = [3,4,5,6,7,8,9,10,11,12,14,16,24,28,33,34,36,39]
     logger.info(cfg)
 
     random.seed(cfg.test_seed)

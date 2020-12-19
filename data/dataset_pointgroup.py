@@ -58,8 +58,8 @@ class Dataset:
 
 
     def testLoader(self):
-        test_file_names = sorted([line.rstrip() for line in open(os.path.join(self.data_root,'meta_data/scannetv2_test.txt'))])
-        test_file_names = list(map(lambda name: os.path.join(self.data_root,self.dataset,'{}_pointgroup.pth'.format(name)),test_file_names))
+        self.test_file_names = sorted([line.rstrip() for line in open(os.path.join(self.data_root,'meta_data/scannetv2_test.txt'))])
+        self.test_file_names = list(map(lambda name: os.path.join(self.data_root,self.dataset,'{}_pointgroup.pth'.format(name)),self.test_file_names))
         #self.test_file_names = sorted(glob.glob(os.path.join(self.data_root, self.dataset, self.test_split, '*' + self.filename_suffix)))
         self.test_files = [torch.load(i) for i in self.test_file_names]
 
