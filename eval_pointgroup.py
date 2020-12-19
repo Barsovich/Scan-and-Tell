@@ -42,7 +42,7 @@ def test(model, model_fn, data_name, epoch):
 
     if cfg.dataset == 'scannetv2':
         if data_name == 'scannet':
-            from data.scannetv2_inst import Dataset
+            from data.dataset_pointgroup import Dataset
             dataset = Dataset(test=True)
             dataset.testLoader()
         else:
@@ -189,8 +189,8 @@ if __name__ == '__main__':
     logger.info('Classes: {}'.format(cfg.classes))
 
     if model_name == 'pointgroup':
-        from model.pointgroup.pointgroup import PointGroup as Network
-        from model.pointgroup.pointgroup import model_fn_decorator
+        from models.pointgroup import PointGroup as Network
+        from models.pointgroup import model_fn_decorator
     else:
         print("Error: no model version " + model_name)
         exit(0)
