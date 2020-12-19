@@ -57,10 +57,10 @@ GROUP:
   cluster_shift_meanActive: 300
   cluster_npoint_thre: 50
 
-  prepare_epochs: 128
+  prepare_epochs: 10
 
 TEST:
-  split: test
+  split: val
   test_epoch: 12
   test_workers: 16
   test_seed: 567

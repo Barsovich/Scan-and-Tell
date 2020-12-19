@@ -6,13 +6,17 @@ import numpy as np
 import glob
 import torch
 import os
+import sys
+sys.path.append('../../') # HACK add the root folder
 
 semantic_label_idxs = [3,4,5,6,7,8,9,10,11,12,14,16,24,28,33,34,36,39]
 semantic_label_names = ['cabinet','bed','chair','sofa','table','door','window','bookshelf','picture','counter','desk','curtain','refrigerator','shower curtain','toilet','sink','bathtub','others']
 
 if __name__ == '__main__':
     split = 'val'
-    files = sorted(glob.glob('{}/scene*_inst_nostuff.pth'.format(split)))
+    dataset = 'scannet_data'
+    test_scan_names = sorted([line.rstrip() for line in open(os.path.join('meta_data/scannetv2_test.txt'))])
+    files = list(map(lambda name: os.path.join(dataset,'{}_pointgroup.pth'.format(name)), test_scan_names))
     rooms = [torch.load(i) for i in files]
 
     if not os.path.exists(split + '_gt'):
