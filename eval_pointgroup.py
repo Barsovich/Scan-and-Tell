@@ -11,9 +11,9 @@ import os
 
 from config.config_pointgroup import cfg
 cfg.task = 'test'
-from util.log import logger
-import util.utils as utils
-import util.eval as eval
+from utils.log import logger
+import utils.utils_pointgroup as utils
+import utils.pointgroup.eval as eval
 
 def init():
     global result_dir
