@@ -40,7 +40,7 @@ def init():
 def test(model, model_fn, data_name, epoch):
     logger.info('>>>>>>>>>>>>>>>> Start Evaluation >>>>>>>>>>>>>>>>')
 
-    if cfg.dataset == 'scannetv2':
+    if cfg.dataset == 'scannet_data':
         if data_name == 'scannet':
             from data.dataset_pointgroup import Dataset
             dataset = Dataset(test=True)
