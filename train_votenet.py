@@ -135,6 +135,7 @@ def get_solver(args, dataloader):
         detection=not args.no_detection,
         caption=not args.no_caption, 
         use_lang_classifier=not args.no_lang_cls,
+        report_ap=args.report_ap,
         lr_decay_step=LR_DECAY_STEP,
         lr_decay_rate=LR_DECAY_RATE,
         bn_decay_step=BN_DECAY_STEP,
@@ -229,6 +230,7 @@ def train(args):
     save_info(args, root, num_params, train_dataset, val_dataset)
     solver(args.epoch, args.verbose)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--tag", type=str, help="tag for the training, e.g. cuda_wl", default="")
@@ -248,6 +250,7 @@ if __name__ == "__main__":
     parser.add_argument("--no_lang_cls", action="store_true", help="Do NOT use language classifier.")
     parser.add_argument("--no_detection", action="store_true", help="Do NOT train the detection module.")
     parser.add_argument("--no_caption", action="store_true", help="Do NOT train the localization module.")
+    parser.add_argument("--report_ap", action="store_true", help="Make mAP evaluation at the end of epochs")
     parser.add_argument("--use_color", action="store_true", help="Use RGB color in input.")
     parser.add_argument("--use_normal", action="store_true", help="Use RGB color in input.")
     parser.add_argument("--use_multiview", action="store_true", help="Use multiview images.")

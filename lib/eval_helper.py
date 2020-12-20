@@ -55,9 +55,6 @@ def get_eval(data_dict, config, caption, use_lang_classifier=False, use_oracle=F
         data_dict: dict
     """
 
-    batch_size, num_words, _ = data_dict["lang_feat"].shape
-
-
     objectness_preds_batch = torch.argmax(data_dict['objectness_scores'], 2).long()
     objectness_labels_batch = data_dict['objectness_label'].long()
 
