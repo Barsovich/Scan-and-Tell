@@ -130,7 +130,7 @@ class Solver():
         }
 
         # AP config
-        POST_DICT = {
+        self.POST_DICT = {
             "remove_empty_box": True, 
             "use_3d_nms": True, 
             "nms_iou": 0.25,
@@ -138,10 +138,11 @@ class Solver():
             "cls_nms": True, 
             "per_class_proposal": True,
             "conf_thresh": 0.05,
-            "dataset_config": DC
+            "dataset_config": self.config
         }
-        AP_IOU_THRESHOLDS = [0.25, 0.5]
-        AP_CALCULATOR_LIST = [APCalculator(iou_thresh, DC.class2type) for iou_thresh in AP_IOU_THRESHOLDS]
+
+        self.AP_IOU_THRESHOLDS = [0.25, 0.5]
+        self.AP_CALCULATOR_LIST = [APCalculator(iou_thresh, self.config.class2type) for iou_thresh in self.AP_IOU_THRESHOLDS]
 
 
         # init log
@@ -219,32 +220,32 @@ class Solver():
 
                         # feed
                         with torch.no_grad():
-                            data = model(data)
+                            data = self.model(data)
                             _, data = get_loss(
                                 data_dict=data, 
-                                config=DC, 
+                                config=self.config, 
                                 detection=True,
                                 caption=False
                             )
                             data = get_eval(
                                 data_dict=data, 
-                                config=DC, 
+                                config=self.config, 
                                 caption=False,
-                                post_processing=POST_DICT
+                                post_processing=self.POST_DICT
                             )
 
                         sem_acc.append(data["sem_acc"].item())
 
-                        batch_pred_map_cls = parse_predictions(data, POST_DICT) 
-                        batch_gt_map_cls = parse_groundtruths(data, POST_DICT) 
-                        for ap_calculator in AP_CALCULATOR_LIST:
+                        batch_pred_map_cls = parse_predictions(data, self.POST_DICT) 
+                        batch_gt_map_cls = parse_groundtruths(data, self.POST_DICT) 
+                        for ap_calculator in self.AP_CALCULATOR_LIST:
                             ap_calculator.step(batch_pred_map_cls, batch_gt_map_cls)
 
                     # aggregate object detection results and report
                     print("\nobject detection sem_acc: {}".format(np.mean(sem_acc)))
-                    for i, ap_calculator in enumerate(AP_CALCULATOR_LIST):
+                    for i, ap_calculator in enumerate(self.AP_CALCULATOR_LIST):
                         print()
-                        print("-"*10, "iou_thresh: %f"%(AP_IOU_THRESHOLDS[i]), "-"*10)
+                        print("-"*10, "iou_thresh: %f"%(self.AP_IOU_THRESHOLDS[i]), "-"*10)
                         metrics_dict = ap_calculator.compute_metrics()
                         for key in metrics_dict:
                             print("eval %s: %f"%(key, metrics_dict[key]))
@@ -348,12 +349,12 @@ class Solver():
 
         # dump
         #self._running_log["lang_acc"] = data_dict["lang_acc"].item()
-        self._running_log["ref_acc"] = np.mean(data_dict["ref_acc"])
+        #self._running_log["ref_acc"] = np.mean(data_dict["ref_acc"])
         self._running_log["obj_acc"] = data_dict["obj_acc"].item()
         self._running_log["pos_ratio"] = data_dict["pos_ratio"].item()
         self._running_log["neg_ratio"] = data_dict["neg_ratio"].item()
-        self._running_log["iou_rate_0.25"] = np.mean(data_dict["ref_iou_rate_0.25"])
-        self._running_log["iou_rate_0.5"] = np.mean(data_dict["ref_iou_rate_0.5"])
+        #self._running_log["iou_rate_0.25"] = np.mean(data_dict["ref_iou_rate_0.25"])
+        #self._running_log["iou_rate_0.5"] = np.mean(data_dict["ref_iou_rate_0.5"])
 
     def _feed(self, dataloader, phase, epoch_id):
         # switch mode

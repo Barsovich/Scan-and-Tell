@@ -54,7 +54,6 @@ def get_model(args, config):
         mean_size_arr=config.mean_size_arr,
         num_proposal=args.num_proposals,
         input_feature_dim=input_channels,
-        use_lang_classifier=(not args.no_lang_cls),
         use_bidir=args.use_bidir
     ).cuda()
 
