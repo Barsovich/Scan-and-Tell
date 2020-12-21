@@ -213,7 +213,7 @@ class Solver():
                     print("AP results of the epoch: {}".format(epoch_id + 1))
 
                     sem_acc = []
-                    for data in tqdm(self.dataloader[]):
+                    for data in tqdm(self.dataloader['val']):
                         for key in data:
                             data[key] = data[key].cuda()
 
