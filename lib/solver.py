@@ -17,6 +17,7 @@ sys.path.append('../') # HACK add the root folder
 from config.config_votenet import CONF
 from lib.loss_helper import get_loss
 from lib.eval_helper import get_eval
+from lib.ap_helper import APCalculator, parse_predictions, parse_groundtruths
 from utils.eta import decode_eta
 from lib.pointnet2.pytorch_utils import BNMomentumScheduler
 
@@ -86,8 +87,8 @@ BEST_REPORT_TEMPLATE = """
 
 class Solver():
     def __init__(self, model, config, dataloader, optimizer, stamp, val_step=10, 
-    detection=True, caption=True, use_lang_classifier=True,
-    lr_decay_step=None, lr_decay_rate=None, bn_decay_step=None, bn_decay_rate=None):
+    detection=True, caption=True, use_lang_classifier=True, report_ap=False,
+    lr_decay_step=None, lr_decay_rate=None, bn_decay_step=None, bn_decay_rate=None,):
 
         self.epoch = 0                    # set in __call__
         self.verbose = 0                  # set in __call__
@@ -101,6 +102,8 @@ class Solver():
 
         self.detection = detection
         self.caption = caption
+
+        self.report_ap = report_ap
 
         self.use_lang_classifier = use_lang_classifier
 
@@ -125,6 +128,22 @@ class Solver():
             "iou_rate_0.25": -float("inf"),
             "iou_rate_0.5": -float("inf")
         }
+
+        # AP config
+        self.POST_DICT = {
+            "remove_empty_box": True, 
+            "use_3d_nms": True, 
+            "nms_iou": 0.25,
+            "use_old_type_nms": False, 
+            "cls_nms": True, 
+            "per_class_proposal": True,
+            "conf_thresh": 0.05,
+            "dataset_config": self.config
+        }
+
+        self.AP_IOU_THRESHOLDS = [0.25, 0.5]
+        self.AP_CALCULATOR_LIST = [APCalculator(iou_thresh, self.config.class2type) for iou_thresh in self.AP_IOU_THRESHOLDS]
+
 
         # init log
         # contains all necessary info for all phases
@@ -189,6 +208,47 @@ class Solver():
 
                 # feed 
                 self._feed(self.dataloader["train"], "train", epoch_id)
+
+                if(self.report_ap & ((epoch_id +1) % 5 == 0)):
+
+                    print("AP results of the epoch: {}".format(epoch_id + 1))
+
+                    sem_acc = []
+                    for data in tqdm(self.dataloader['val']):
+                        for key in data:
+                            data[key] = data[key].cuda()
+
+                        # feed
+                        with torch.no_grad():
+                            data = self.model(data)
+                            _, data = get_loss(
+                                data_dict=data, 
+                                config=self.config, 
+                                detection=True,
+                                caption=False
+                            )
+                            data = get_eval(
+                                data_dict=data, 
+                                config=self.config, 
+                                caption=False,
+                                post_processing=self.POST_DICT
+                            )
+
+                        sem_acc.append(data["sem_acc"].item())
+
+                        batch_pred_map_cls = parse_predictions(data, self.POST_DICT) 
+                        batch_gt_map_cls = parse_groundtruths(data, self.POST_DICT) 
+                        for ap_calculator in self.AP_CALCULATOR_LIST:
+                            ap_calculator.step(batch_pred_map_cls, batch_gt_map_cls)
+
+                    # aggregate object detection results and report
+                    print("\nobject detection sem_acc: {}".format(np.mean(sem_acc)))
+                    for i, ap_calculator in enumerate(self.AP_CALCULATOR_LIST):
+                        print()
+                        print("-"*10, "iou_thresh: %f"%(self.AP_IOU_THRESHOLDS[i]), "-"*10)
+                        metrics_dict = ap_calculator.compute_metrics()
+                        for key in metrics_dict:
+                            print("eval %s: %f"%(key, metrics_dict[key]))
 
                 # save model
                 self._log("saving last models...\n")
@@ -267,9 +327,7 @@ class Solver():
             data_dict=data_dict, 
             config=self.config, 
             detection=self.detection,
-            caption
-=self.caption
-, 
+            caption=self.caption, 
             use_lang_classifier=self.use_lang_classifier
         )
 
@@ -290,13 +348,13 @@ class Solver():
         )
 
         # dump
-        self._running_log["lang_acc"] = data_dict["lang_acc"].item()
-        self._running_log["ref_acc"] = np.mean(data_dict["ref_acc"])
+        #self._running_log["lang_acc"] = data_dict["lang_acc"].item()
+        #self._running_log["ref_acc"] = np.mean(data_dict["ref_acc"])
         self._running_log["obj_acc"] = data_dict["obj_acc"].item()
         self._running_log["pos_ratio"] = data_dict["pos_ratio"].item()
         self._running_log["neg_ratio"] = data_dict["neg_ratio"].item()
-        self._running_log["iou_rate_0.25"] = np.mean(data_dict["ref_iou_rate_0.25"])
-        self._running_log["iou_rate_0.5"] = np.mean(data_dict["ref_iou_rate_0.5"])
+        #self._running_log["iou_rate_0.25"] = np.mean(data_dict["ref_iou_rate_0.25"])
+        #self._running_log["iou_rate_0.5"] = np.mean(data_dict["ref_iou_rate_0.5"])
 
     def _feed(self, dataloader, phase, epoch_id):
         # switch mode
