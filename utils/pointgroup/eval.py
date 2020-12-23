@@ -266,7 +266,7 @@ def assign_instances_for_scan(scene_name, pred_info, gt_file):
 
 
 def print_results(avgs):
-    from util.log import logger
+    from utils.log import logger
     sep     = ""
     col1    = ":"
     lineLen = 64

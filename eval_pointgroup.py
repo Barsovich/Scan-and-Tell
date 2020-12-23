@@ -14,6 +14,7 @@ cfg.task = 'test'
 from utils.log import logger
 import utils.utils_pointgroup as utils
 import utils.pointgroup.eval as eval
+import lib.ap_helper as ap_helper
 
 def init():
     global result_dir
@@ -109,6 +110,30 @@ def test(model, model_fn, data_name, epoch):
                 cluster_semantic_id = semantic_id[pick_idxs]
 
                 nclusters = clusters.shape[0]
+
+                coords = batch['locs'].cuda()                          # (N, 1 + 3), long, cuda, dimension 0 for batch_idx
+                instance_info = batch['instance_info'].cuda()          # (N, 9), float32, cuda, (meanxyz, minxyz, maxxyz)
+                instance_labels = batch['instance_labels'].cuda()      # (N), long, cuda, 0~total_nInst, -100
+                labels = batch['labels'].cuda()                        # (N), long, cuda
+                instance_pointnum = batch['instance_pointnum'].cuda()  # (total_nInst), int, cuda
+                gt_cluster_count = instance_pointnum.shape[0]
+                
+                # calculate AP
+                pred_bboxes = ap_helper.calculate_pred_bboxes_pointgroup(coords, proposals_pred, cluster_semantic_id, cluster_scores)
+                gt_bboxes = ap_helper.calculate_gt_bboxes_pointgroup(instance_info, labels, instance_labels, gt_cluster_count)
+                
+                AP_IOU_THRESHOLDS = [0.25, 0.5]
+                AP_CALCULATOR_LIST = [ap_helper.APCalculator(iou_thresh) for iou_thresh in AP_IOU_THRESHOLDS]
+                for ap_calculator in AP_CALCULATOR_LIST:
+                    ap_calculator.step(pred_bboxes, gt_bboxes)
+
+                # report results
+                for i, ap_calculator in enumerate(AP_CALCULATOR_LIST):
+                    print()
+                    print("-"*10, "iou_thresh: %f"%(AP_IOU_THRESHOLDS[i]), "-"*10)
+                    metrics_dict = ap_calculator.compute_metrics()
+                    for key in metrics_dict:
+                        print("eval %s: %f"%(key, metrics_dict[key]))
 
                 ##### prepare for evaluation
                 if cfg.eval:

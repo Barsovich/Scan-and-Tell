@@ -37,6 +37,112 @@ def softmax(x):
     probs /= np.sum(probs, axis=len(shape)-1, keepdims=True)
     return probs
 
+def getBoundingBox(point_coords):
+    ''' Calculate the bounding box from a set of points
+    Args:
+        point_coords: (num_of_points, 4)
+            [[batch_idx, x1, y1, z1], ...]
+            batch_idx not used
+    Returns:
+        [min_x, min_y, min_z, max_x, max_y, max_z]
+    '''
+    min_x = point_coords.min(dim=1)
+    min_y = point_coords.min(dim=2)
+    min_z = point_coords.min(dim=3)
+    max_x = point_coords.max(dim=1)
+    max_y = point_coords.max(dim=2)
+    max_z = point_coords.max(dim=3)
+    return [min_x, min_y, min_z, max_x, max_y, max_z]
+
+def getBoundingBoxFromInstanceInfo(instance_info):
+    return [instance_info[3], instance_info[4], instance_info[5], instance_info[6], instance_info[7], instance_info[8]]
+
+def calculate_pred_bboxes_pointgroup(point_coords, proposals_pred, cluster_semantic_id, scores):
+    """ Calculate bounding boxes from PointGroup prediction clusters
+    batch_size is 1 for Pointgroup test loader
+    
+    Args:
+        point_coords: (num_of_points, 4)
+            [[batch_idx, x1, y1, z1], ...]
+        proposals_pred: Binary matrix showing which points belong to which proposal(cluster),
+            (nProposal, N), int, cuda
+        cluster_semantic_id: semantic id of each cluster, (num_of_proposals,)
+        scores: confidence score for each cluster, (num_of_proposals,)
+
+    Returns:
+        predictions: a list of len == batch size (BS) == 1
+            [pred_list_i], i = 0, 1, ..., BS-1
+            where pred_list_i = [(pred_sem_cls, box_params, box_score)_j]
+            where j = 0, ..., num of valid detections - 1 from sample input i
+
+            for i in range(batch_size):
+            	for j in range(num_of_prediction_proposals):
+            		[	
+            			semantic_class -> (float), 
+            			bbox -> ([min_x, min_y, min_z, max_x, max_y, max_z]), 
+            			bbox_score -> (float, [0-1])
+        			]
+    """
+    num_of_prediction_proposals = scores.shape[0]
+    predictions = []
+    for j in range(num_of_prediction_proposals):
+        # Calculate the bounding box for the cluster
+        point_mask_for_current_proposal = proposals_pred[j, :]
+        point_coords_in_current_proposal = point_coords[point_mask_for_current_proposal]
+        bbox = getBoundingBox(point_coords_in_current_proposal)
+
+        # Find the semantic class of the cluster
+        semantic_class = cluster_semantic_id[j]
+
+        # Get the score of the cluster
+        score = scores[j]
+
+        # Append the results to the list
+        predictions.append([semantic_class, bbox, score])
+    return [predictions] # Return a list of length one because batch_size for test is one.
+
+def calculate_gt_bboxes_pointgroup(instance_info, labels, instance_labels, gt_cluster_count):
+    """ Calculate bounding boxes from PointGroup ground truth clusters
+    batch_size is 1 for Pointgroup test loader
+    
+    Args:
+        instance_info: Instance information for each point
+            (meanxyz, minxyz, maxxyz), (N, 9), float32, cuda, 
+        instance_labels: Instance label for each point
+            (N), long, cuda, 0~gt_cluster_count, -100
+        gt_cluster_count: Number of ground truth clusters
+            int
+
+    Returns:
+        ground_truth: a list of len == batch size (BS) == 1
+            [gt_list_i], i = 0, 1, ..., BS-1
+            where gt_list_i = [(gt_sem_cls, box_params)_j]
+            where j = 0, ..., clusters - 1 from sample input i
+
+            for i in range(batch_size):
+            	for j in range(num_of_gt_clusters):
+            		[	
+            			semantic_class -> (float), 
+            			bbox -> ([min_x, min_y, min_z, max_x, max_y, max_z]), 
+        			]
+    """
+    ground_truth = []
+    for i in range(gt_cluster_count):
+
+        # Calculate the bounding box for the cluster
+        sample_point_idx_from_current_cluster = (instance_labels == i).nonzero()[0]
+        instance_info_for_sample_point = instance_info[sample_point_idx_from_current_cluster]
+        bbox = getBoundingBoxFromInstanceInfo(instance_info_for_sample_point)
+
+        # Find the semantic class of the cluster
+        semantic_class = labels[sample_point_idx_from_current_cluster]
+
+        if semantic_class is not -100: # If -100, we ignore the cluster
+            # Append the results to the list
+            ground_truth.append([semantic_class, bbox])
+
+    return [ground_truth] # Return a list of length one because batch_size for test is one.
+
 def parse_predictions(end_points, config_dict):
     """ Parse predictions to OBB parameters and suppress overlapping boxes
     
