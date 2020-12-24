@@ -119,7 +119,7 @@ def test(model, model_fn, data_name, epoch):
                 gt_cluster_count = instance_pointnum.shape[0]
                 
                 # calculate AP
-                pred_bboxes = ap_helper.calculate_pred_bboxes_pointgroup(coords, proposals_pred, cluster_semantic_id, cluster_scores)
+                pred_bboxes = ap_helper.calculate_pred_bboxes_pointgroup(coords, clusters, cluster_semantic_id, cluster_scores)
                 gt_bboxes = ap_helper.calculate_gt_bboxes_pointgroup(instance_info, labels, instance_labels, gt_cluster_count)
                 
                 AP_IOU_THRESHOLDS = [0.25, 0.5]
