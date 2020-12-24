@@ -238,9 +238,12 @@ def eval_det_multiprocessing(pred_all, gt_all, ovthresh=0.25, use_07_metric=Fals
     rec = {}
     prec = {}
     ap = {}
-    p = Pool(processes=10)
-    ret_values = p.map(eval_det_cls_wrapper, [(pred[classname], gt[classname], ovthresh, use_07_metric, get_iou_func) for classname in gt.keys() if classname in pred])
-    p.close()
+    ret_values = []
+    args = [(pred[classname], gt[classname], ovthresh, use_07_metric, get_iou_func) for classname in gt.keys() if classname in pred]
+
+    for arg in args:
+        ret_values.append(eval_det_cls_wrapper(arg))
+
     for i, classname in enumerate(gt.keys()):
         if classname in pred:
             rec[classname], prec[classname], ap[classname] = ret_values[i]

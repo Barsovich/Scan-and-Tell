@@ -46,13 +46,9 @@ def getBoundingBox(point_coords):
     Returns:
         [min_x, min_y, min_z, max_x, max_y, max_z]
     '''
-    min_x = point_coords.min(dim=1)
-    min_y = point_coords.min(dim=2)
-    min_z = point_coords.min(dim=3)
-    max_x = point_coords.max(dim=1)
-    max_y = point_coords.max(dim=2)
-    max_z = point_coords.max(dim=3)
-    return [min_x, min_y, min_z, max_x, max_y, max_z]
+    mins = point_coords.min(dim=0).values
+    maxs = point_coords.max(dim=0).values
+    return [mins[1], mins[2], mins[3], maxs[1], maxs[2], maxs[3]]
 
 def getBoundingBoxFromInstanceInfo(instance_info):
     return [instance_info[3], instance_info[4], instance_info[5], instance_info[6], instance_info[7], instance_info[8]]
@@ -65,7 +61,7 @@ def calculate_pred_bboxes_pointgroup(point_coords, proposals_pred, cluster_seman
         point_coords: (num_of_points, 4)
             [[batch_idx, x1, y1, z1], ...]
         proposals_pred: Binary matrix showing which points belong to which proposal(cluster),
-            (nProposal, N), int, cuda
+            (num_of_proposals, N), int, cuda
         cluster_semantic_id: semantic id of each cluster, (num_of_proposals,)
         scores: confidence score for each cluster, (num_of_proposals,)
 
@@ -87,7 +83,7 @@ def calculate_pred_bboxes_pointgroup(point_coords, proposals_pred, cluster_seman
     predictions = []
     for j in range(num_of_prediction_proposals):
         # Calculate the bounding box for the cluster
-        point_mask_for_current_proposal = proposals_pred[j, :]
+        point_mask_for_current_proposal = proposals_pred[j, :] == 1
         point_coords_in_current_proposal = point_coords[point_mask_for_current_proposal]
         bbox = getBoundingBox(point_coords_in_current_proposal)
 
@@ -131,7 +127,7 @@ def calculate_gt_bboxes_pointgroup(instance_info, labels, instance_labels, gt_cl
 
         # Calculate the bounding box for the cluster
         sample_point_idx_from_current_cluster = (instance_labels == i).nonzero()[0]
-        instance_info_for_sample_point = instance_info[sample_point_idx_from_current_cluster]
+        instance_info_for_sample_point = instance_info[sample_point_idx_from_current_cluster][0]
         bbox = getBoundingBoxFromInstanceInfo(instance_info_for_sample_point)
 
         # Find the semantic class of the cluster
