@@ -46,12 +46,18 @@ def getBoundingBox(point_coords):
     Returns:
         [min_x, min_y, min_z, max_x, max_y, max_z]
     '''
-    mins = point_coords.min(dim=0).values
-    maxs = point_coords.max(dim=0).values
-    return [mins[1], mins[2], mins[3], maxs[1], maxs[2], maxs[3]]
+    mins = point_coords.min(dim=0).values[1:3]
+    maxs = point_coords.max(dim=0).values[1:3]
+    center = (mins + maxs) / 2
+    lengths = maxs - mins
+    return [center[0], center[1], center[2], lengths[0], lengths[1], lengths[2]]
 
 def getBoundingBoxFromInstanceInfo(instance_info):
-    return [instance_info[3], instance_info[4], instance_info[5], instance_info[6], instance_info[7], instance_info[8]]
+    mins = np.array([instance_info[3], instance_info[4], instance_info[5]])
+    maxs = np.array([instance_info[6], instance_info[7], instance_info[8]])
+    center = (mins + maxs) / 2
+    lengths = maxs - mins
+    return [center[0], center[1], center[2], lengths[0], lengths[1], lengths[2]]
 
 def calculate_pred_bboxes_pointgroup(point_coords, proposals_pred, cluster_semantic_id, scores):
     """ Calculate bounding boxes from PointGroup prediction clusters
@@ -105,7 +111,9 @@ def calculate_gt_bboxes_pointgroup(instance_info, labels, instance_labels, gt_cl
         instance_info: Instance information for each point
             (meanxyz, minxyz, maxxyz), (N, 9), float32, cuda, 
         instance_labels: Instance label for each point
-            (N), long, cuda, 0~gt_cluster_count, -100
+            (N), long, cuda, 0~gt_cluster_count, -100        
+        labels: Class label for each point
+            (N), long, cuda, 0~class_count, -100
         gt_cluster_count: Number of ground truth clusters
             int
 
