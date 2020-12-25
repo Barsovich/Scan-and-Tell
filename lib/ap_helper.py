@@ -46,8 +46,8 @@ def getBoundingBox(point_coords):
     Returns:
         [min_x, min_y, min_z, max_x, max_y, max_z]
     '''
-    mins = point_coords.min(dim=0).values[1:3]
-    maxs = point_coords.max(dim=0).values[1:3]
+    mins = point_coords.min(dim=0).values[1:4]
+    maxs = point_coords.max(dim=0).values[1:4]
     center = (mins + maxs) / 2
     lengths = maxs - mins
     return [center[0], center[1], center[2], lengths[0], lengths[1], lengths[2]]
