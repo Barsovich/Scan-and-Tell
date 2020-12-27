@@ -9,8 +9,8 @@ import numpy as np
 import torch
 
 sys.path.append('../') # HACK add the root folder
-from utils.eval_det import eval_det_cls, eval_det_multiprocessing
-from utils.eval_det import get_iou_obb
+from utils.eval_det import eval_det_cls, eval_det
+from utils.eval_det import get_iou_obb, get_iou
 from utils.nms import nms_2d_faster, nms_3d_faster, nms_3d_faster_samecls
 from utils.box_util import get_3d_box
 from data.scannet.model_util_scannet import extract_pc_in_box3d
@@ -94,7 +94,7 @@ def calculate_pred_bboxes_pointgroup(point_coords, proposals_pred, cluster_seman
         bbox = getBoundingBox(point_coords_in_current_proposal)
 
         # Find the semantic class of the cluster
-        semantic_class = cluster_semantic_id[j]
+        semantic_class = cluster_semantic_id[j].item()
 
         # Get the score of the cluster
         score = scores[j]
@@ -134,12 +134,12 @@ def calculate_gt_bboxes_pointgroup(instance_info, labels, instance_labels, gt_cl
     for i in range(gt_cluster_count):
 
         # Calculate the bounding box for the cluster
-        sample_point_idx_from_current_cluster = (instance_labels == i).nonzero()[0]
-        instance_info_for_sample_point = instance_info[sample_point_idx_from_current_cluster][0]
+        points_from_current_cluster = instance_labels == i
+        instance_info_for_sample_point = instance_info[points_from_current_cluster][0]
         bbox = getBoundingBoxFromInstanceInfo(instance_info_for_sample_point)
 
         # Find the semantic class of the cluster
-        semantic_class = labels[sample_point_idx_from_current_cluster]
+        semantic_class = labels[points_from_current_cluster][0].item()
 
         if semantic_class is not -100: # If -100, we ignore the cluster
             # Append the results to the list
@@ -332,7 +332,7 @@ def parse_groundtruths(end_points, config_dict):
 
 class APCalculator(object):
     ''' Calculating Average Precision '''
-    def __init__(self, ap_iou_thresh=0.25, class2type_map=None):
+    def __init__(self, ap_iou_thresh=0.25, class2type_map=None, point_group=False):
         """
         Args:
             ap_iou_thresh: float between 0 and 1.0
@@ -342,6 +342,7 @@ class APCalculator(object):
         self.ap_iou_thresh = ap_iou_thresh
         self.class2type_map = class2type_map
         self.reset()
+        self.point_group = point_group
         
     def step(self, batch_pred_map_cls, batch_gt_map_cls):
         """ Accumulate one batch of prediction and groundtruth.
@@ -362,7 +363,8 @@ class APCalculator(object):
     def compute_metrics(self):
         """ Use accumulated predictions and groundtruths to compute Average Precision.
         """
-        rec, prec, ap = eval_det_multiprocessing(self.pred_map_cls, self.gt_map_cls, ovthresh=self.ap_iou_thresh, get_iou_func=get_iou_obb)
+        iou_func = get_iou if self.point_group else get_iou_obb
+        rec, prec, ap = eval_det(self.pred_map_cls, self.gt_map_cls, ovthresh=self.ap_iou_thresh, get_iou_func=iou_func)
         ret_dict = {} 
         for key in sorted(ap.keys()):
             clsname = self.class2type_map[key] if self.class2type_map else str(key)

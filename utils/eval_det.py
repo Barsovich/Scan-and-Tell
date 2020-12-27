@@ -197,10 +197,15 @@ def eval_det(pred_all, gt_all, ovthresh=0.25, use_07_metric=False, get_iou_func=
     prec = {}
     ap = {}
     for classname in gt.keys():
-        print('Computing AP for class: ', classname)
-        rec[classname], prec[classname], ap[classname] = eval_det_cls(pred[classname], gt[classname], ovthresh, use_07_metric, get_iou_func)
-        print(classname, ap[classname])
-    
+        if classname in pred:
+            # print('Computing AP for class: ', classname)
+            rec[classname], prec[classname], ap[classname] = eval_det_cls(pred[classname], gt[classname], ovthresh, use_07_metric, get_iou_func)
+            # print(classname, ap[classname])
+        else:
+            # print('Skipping AP for class: ', classname)
+            rec[classname] = 0
+            prec[classname] = 0
+            ap[classname] = 0
     return rec, prec, ap 
 
 from multiprocessing import Pool
@@ -238,12 +243,9 @@ def eval_det_multiprocessing(pred_all, gt_all, ovthresh=0.25, use_07_metric=Fals
     rec = {}
     prec = {}
     ap = {}
-    ret_values = []
-    args = [(pred[classname], gt[classname], ovthresh, use_07_metric, get_iou_func) for classname in gt.keys() if classname in pred]
-
-    for arg in args:
-        ret_values.append(eval_det_cls_wrapper(arg))
-
+    p = Pool(processes=10)
+    ret_values = p.map(eval_det_cls_wrapper, [(pred[classname], gt[classname], ovthresh, use_07_metric, get_iou_func) for classname in gt.keys() if classname in pred])
+    p.close()
     for i, classname in enumerate(gt.keys()):
         if classname in pred:
             rec[classname], prec[classname], ap[classname] = ret_values[i]
@@ -252,5 +254,4 @@ def eval_det_multiprocessing(pred_all, gt_all, ovthresh=0.25, use_07_metric=Fals
             prec[classname] = 0
             ap[classname] = 0
         print(classname, ap[classname])
-    
     return rec, prec, ap 
