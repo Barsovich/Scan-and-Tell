@@ -19,8 +19,8 @@ if __name__ == '__main__':
     files = list(map(lambda name: os.path.join(dataset,'{}_pointgroup.pth'.format(name)), test_scan_names))
     rooms = [torch.load(i) for i in files]
 
-    if not os.path.exists(split + '_gt'):
-        os.mkdir(split + '_gt')
+    if not os.path.exists(os.path.join(dataset, split + '_gt')):
+        os.mkdir(os.path.join(dataset, split + '_gt'))
 
     for i in range(len(rooms)):
         xyz, rgb, label, instance_label = rooms[i]   # label 0~19 -100;  instance_label 0~instance_num-1 -100
@@ -37,8 +37,4 @@ if __name__ == '__main__':
             semantic_label = semantic_label_idxs[sem_id]
             instance_label_new[instance_mask] = semantic_label * 1000 + inst_id + 1
 
-        np.savetxt(os.path.join(split + '_gt', scene_name + '.txt'), instance_label_new, fmt='%d')
-
-
-
-
+        np.savetxt(os.path.join(dataset, split + '_gt', scene_name + '.txt'), instance_label_new, fmt='%d')
