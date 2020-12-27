@@ -120,10 +120,9 @@ def test(model, model_fn, data_name, epoch):
                 
                 # calculate AP
                 pred_bboxes = ap_helper.calculate_pred_bboxes_pointgroup(coords, clusters, cluster_semantic_id, cluster_scores)
-                gt_bboxes = ap_helper.calculate_gt_bboxes_pointgroup(instance_info, labels, instance_labels, gt_cluster_count)
-                
+                gt_bboxes = ap_helper.calculate_gt_bboxes_pointgroup(coords, labels, instance_labels, gt_cluster_count)
                 AP_IOU_THRESHOLDS = [0.25, 0.5]
-                AP_CALCULATOR_LIST = [ap_helper.APCalculator(iou_thresh) for iou_thresh in AP_IOU_THRESHOLDS]
+                AP_CALCULATOR_LIST = [ap_helper.APCalculator(iou_thresh, point_group=True) for iou_thresh in AP_IOU_THRESHOLDS]
                 for ap_calculator in AP_CALCULATOR_LIST:
                     ap_calculator.step(pred_bboxes, gt_bboxes)
 

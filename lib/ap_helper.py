@@ -50,11 +50,11 @@ def getBoundingBox(point_coords):
     maxs = point_coords.max(dim=0).values[1:4]
     center = (mins + maxs) / 2
     lengths = maxs - mins
-    return [center[0], center[1], center[2], lengths[0], lengths[1], lengths[2]]
+    return [center[0].item(), center[1].item(), center[2].item(), lengths[0].item(), lengths[1].item(), lengths[2].item()]
 
 def getBoundingBoxFromInstanceInfo(instance_info):
-    mins = np.array([instance_info[3], instance_info[4], instance_info[5]])
-    maxs = np.array([instance_info[6], instance_info[7], instance_info[8]])
+    mins = np.array([instance_info[3].item(), instance_info[4].item(), instance_info[5].item()])
+    maxs = np.array([instance_info[6].item(), instance_info[7].item(), instance_info[8].item()])
     center = (mins + maxs) / 2
     lengths = maxs - mins
     return [center[0], center[1], center[2], lengths[0], lengths[1], lengths[2]]
@@ -97,13 +97,13 @@ def calculate_pred_bboxes_pointgroup(point_coords, proposals_pred, cluster_seman
         semantic_class = cluster_semantic_id[j].item()
 
         # Get the score of the cluster
-        score = scores[j]
+        score = scores[j].item()
 
         # Append the results to the list
         predictions.append([semantic_class, bbox, score])
     return [predictions] # Return a list of length one because batch_size for test is one.
 
-def calculate_gt_bboxes_pointgroup(instance_info, labels, instance_labels, gt_cluster_count):
+def calculate_gt_bboxes_pointgroup(coords, labels, instance_labels, gt_cluster_count):
     """ Calculate bounding boxes from PointGroup ground truth clusters
     batch_size is 1 for Pointgroup test loader
     
@@ -135,15 +135,15 @@ def calculate_gt_bboxes_pointgroup(instance_info, labels, instance_labels, gt_cl
 
         # Calculate the bounding box for the cluster
         points_from_current_cluster = instance_labels == i
-        instance_info_for_sample_point = instance_info[points_from_current_cluster][0]
-        bbox = getBoundingBoxFromInstanceInfo(instance_info_for_sample_point)
+        point_coords_in_current_cluster = coords[points_from_current_cluster]
+        bbox = getBoundingBox(point_coords_in_current_cluster)
 
         # Find the semantic class of the cluster
         semantic_class = labels[points_from_current_cluster][0].item()
 
-        if semantic_class is not -100: # If -100, we ignore the cluster
-            # Append the results to the list
-            ground_truth.append([semantic_class, bbox])
+        # if semantic_class is not -100: # If -100, we ignore the cluster
+        # Append the results to the list
+        ground_truth.append([semantic_class, bbox])
 
     return [ground_truth] # Return a list of length one because batch_size for test is one.
 

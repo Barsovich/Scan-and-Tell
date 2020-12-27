@@ -5,7 +5,7 @@ import utils.pointgroup.utils_3d as util_3d
 import utils.utils_pointgroup as util
 
 # ---------- Label info ---------- #
-CLASS_LABELS = ['cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window', 'bookshelf', 'picture', 'counter', 'desk', 'curtain', 'refrigerator', 'shower curtain', 'toilet', 'sink', 'bathtub', 'otherfurniture']
+CLASS_LABELS = ['cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window', 'bookshelf', 'picture', 'counter', 'desk', 'curtain', 'refrigerator', 'shower curtain', 'toilet', 'sink', 'bathtub', 'other']
 VALID_CLASS_IDS = np.array([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 24, 28, 33, 34, 36, 39])
 ID_TO_LABEL = {}
 LABEL_TO_ID = {}
@@ -231,7 +231,7 @@ def assign_instances_for_scan(scene_name, pred_info, gt_file):
         # read the mask
         pred_mask = pred_info['mask'][i]   # (N), long
         if len(pred_mask) != len(gt_ids):
-            util.print_error('wrong number of lines in mask#%d: ' % (i)  + '(%d) vs #mesh vertices (%d)' % (len(pred_mask), len(gt_ids)))
+            util.print_error('wrong number of lines in mask#%d: ' % (i)  + '(%d) vs #mesh vertices (%d) in scene "%s"' % (len(pred_mask), len(gt_ids), scene_name))
         # convert to binary
         pred_mask = np.not_equal(pred_mask, 0)
         num = np.count_nonzero(pred_mask)
