@@ -84,16 +84,51 @@ class GraphModule(nn.Module):
 
     def _aggregate(self,A,E):
         """
+        Take the graph in form of node indices to build edges with per node and the object relation 
+        features to aggregate node features by summing the edge features
+        -----------------
         Arguments:
-            A: [num_objects,num_objects] Adjacency matrix
+            A: [num_objects,num_edges] Graph representation
             E: [num_objects,num_objects,features] Object relation features
         """
-        A.type(E.dtype)
-        V = torch.zeros(E.shape[0],E.shape[2])
+        # A.type(E.dtype)
+        # V = torch.zeros(E.shape[0],E.shape[2])
 
-        for idx,mask in enumerate(A):
-            feature = torch.matmul(mask,E[idx])
-            V[idx] = feature
+        # for idx,mask in enumerate(A):
+        #     feature = torch.matmul(mask,E[idx])
+        #     V[idx] = feature
 
+        num_objects = E.shape[0]
+        V = E[torch.arange(num_objects).unsqueeze(-1),A].sum(dim=1)
         
         return V 
+
+
+
+
+def build_graph(centers,num_neighbors,drop_self_edge=True):
+    """
+    Build the scene graph from the object centers
+    by taking K closest objects
+
+    -------------
+    Arguments:
+       centers: object centers
+       num_neighbors: number of objects to build edges with; node rank 
+
+    """
+    l2_distances = torch.norm(centers.unsqueeze(dim=1) - centers,dim=2)
+    edge_idx = torch.topk(l2_distances,k=num_neighbors + 1,dim=1,largest=False)[1] #get k + 1 closest centers
+
+    if drop_self_edge:
+        edge_idx = edge_idx[:,:1] #drop the self-edge A[i,i]
+
+    return edge_idx
+
+
+
+
+
+
+
+
