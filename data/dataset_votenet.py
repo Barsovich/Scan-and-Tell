@@ -1,7 +1,4 @@
-'''
-File Created: Monday, 25th November 2019 1:35:30 pm
-Author: Dave Zhenyu Chen (zhenyu.chen@tum.de)
-'''
+
 
 import os
 import sys
@@ -9,13 +6,18 @@ import time
 import h5py
 import json
 import pickle
+import random
 import numpy as np
 import multiprocessing as mp
+
+from itertools import chain
+from collections import Counter
 from torch.utils.data import Dataset
 
 sys.path.append('../') # HACK add the root folder
 from config.config_votenet import CONF
 from utils.pc_utils import random_sampling, rotx, roty, rotz
+from utils.box_util import get_3d_box, get_3d_box_batch
 from data.scannet.model_util_scannet import rotate_aligned_boxes, ScannetDatasetConfig, rotate_aligned_boxes_along_axis
 
 # data setting
@@ -25,8 +27,11 @@ MEAN_COLOR_RGB = np.array([109.8, 97.2, 83.8])
 
 # data path
 SCANNET_V2_TSV = os.path.join(CONF.PATH.SCANNET_META, "scannetv2-labels.combined.tsv")
+SCANREFER_VOCAB = os.path.join(CONF.PATH.DATA, "ScanRefer_vocabulary.json")
+SCANREFER_VOCAB_WEIGHTS = os.path.join(CONF.PATH.DATA, "ScanRefer_vocabulary_weights.json")
 # MULTIVIEW_DATA = os.path.join(CONF.PATH.SCANNET_DATA, "enet_feats.hdf5")
 MULTIVIEW_DATA = CONF.MULTIVIEW
+GLOVE_PICKLE = os.path.join(CONF.PATH.DATA, "glove.p")
 
 class ScannetReferenceDataset(Dataset):
        
@@ -215,7 +220,6 @@ class ScannetReferenceDataset(Dataset):
         data_dict["scan_idx"] = np.array(idx).astype(np.int64)
         data_dict["pcl_color"] = pcl_color
         data_dict["ref_box_label"] = ref_box_label.astype(np.int64) # 0/1 reference labels for each object bbox
-        data_dict["ref_box_label"] = ref_box_label.astype(np.int64) # 0/1 reference labels for each object bbox
         data_dict["ref_center_label"] = ref_center_label.astype(np.float32)
         data_dict["ref_heading_class_label"] = np.array(int(ref_heading_class_label)).astype(np.int64)
         data_dict["ref_heading_residual_label"] = np.array(int(ref_heading_residual_label)).astype(np.int64)
@@ -303,9 +307,118 @@ class ScannetReferenceDataset(Dataset):
 
         return unique_multiple_lookup
 
+    def _tranform_des(self):
+        lang = {}
+        label = {}
+        for data in self.scanrefer:
+            scene_id = data["scene_id"]
+            object_id = data["object_id"]
+            ann_id = data["ann_id"]
+
+            if scene_id not in lang:
+                lang[scene_id] = {}
+                label[scene_id] = {}
+
+            if object_id not in lang[scene_id]:
+                lang[scene_id][object_id] = {}
+                label[scene_id][object_id] = {}
+
+            if ann_id not in lang[scene_id][object_id]:
+                lang[scene_id][object_id][ann_id] = {}
+                label[scene_id][object_id][ann_id] = {}
+
+            # trim long descriptions
+            tokens = data["token"][:CONF.TRAIN.MAX_DES_LEN]
+
+            # tokenize the description
+            tokens = ["sos"] + tokens + ["eos"]
+            embeddings = np.zeros((CONF.TRAIN.MAX_DES_LEN + 2, 300))
+            labels = np.zeros((CONF.TRAIN.MAX_DES_LEN + 2)) # start and end
+
+            # load
+            for token_id in range(len(tokens)):
+                token = tokens[token_id]
+                try:
+                    embeddings[token_id] = self.glove[token]
+                    labels[token_id] = self.vocabulary["word2idx"][token]
+                except KeyError:
+                    embeddings[token_id] = self.glove["unk"]
+                    labels[token_id] = self.vocabulary["word2idx"]["unk"]
+            
+            # store
+            lang[scene_id][object_id][ann_id] = embeddings
+            label[scene_id][object_id][ann_id] = labels
+
+        return lang, label
+    
+    def _build_vocabulary(self):
+        if os.path.exists(SCANREFER_VOCAB):
+            self.vocabulary = json.load(open(SCANREFER_VOCAB))
+        else:
+            if self.split == "train":
+                all_words = chain(*[data["token"][:CONF.TRAIN.MAX_DES_LEN] for data in self.scanrefer])
+                word_counter = Counter(all_words)
+                word_counter = sorted([(k, v) for k, v in word_counter.items() if k in self.glove], key=lambda x: x[1], reverse=True)
+                word_list = [k for k, _ in word_counter]
+
+                # build vocabulary
+                word2idx, idx2word = {}, {}
+                spw = ["pad_", "unk", "sos", "eos"] # NOTE distinguish padding token "pad_" and the actual word "pad"
+                for i, w in enumerate(word_list):
+                    shifted_i = i + len(spw)
+                    word2idx[w] = shifted_i
+                    idx2word[shifted_i] = w
+
+                # add special words into vocabulary
+                for i, w in enumerate(spw):
+                    word2idx[w] = i
+                    idx2word[i] = w
+
+                vocab = {
+                    "word2idx": word2idx,
+                    "idx2word": idx2word
+                }
+                json.dump(vocab, open(SCANREFER_VOCAB, "w"), indent=4)
+
+                self.vocabulary = vocab
+
+    def _build_frequency(self):
+        if os.path.exists(SCANREFER_VOCAB_WEIGHTS):
+            with open(SCANREFER_VOCAB_WEIGHTS) as f:
+                weights = json.load(f)
+                self.weights = np.array([v for _, v in weights.items()])
+        else:
+            all_tokens = []
+            for scene_id in self.lang_ids.keys():
+                for object_id in self.lang_ids[scene_id].keys():
+                    for ann_id in self.lang_ids[scene_id][object_id].keys():
+                        all_tokens += self.lang_ids[scene_id][object_id][ann_id].astype(int).tolist()
+
+            word_count = Counter(all_tokens)
+            word_count = sorted([(k, v) for k, v in word_count.items()], key=lambda x: x[0])
+            
+            # frequencies = [c for _, c in word_count]
+            # weights = np.array(frequencies).astype(float)
+            # weights = weights / np.sum(weights)
+            # weights = 1 / np.log(1.05 + weights)
+
+            weights = np.ones((len(word_count)))
+
+            self.weights = weights
+            
+            with open(SCANREFER_VOCAB_WEIGHTS, "w") as f:
+                weights = {k: v for k, v in enumerate(weights)}
+                json.dump(weights, f, indent=4)
+
 
     def _load_data(self):
         print("loading data...")
+        # load language features
+        self.glove = pickle.load(open(GLOVE_PICKLE, "rb"))
+        self._build_vocabulary()
+        self.num_vocabs = len(self.vocabulary["word2idx"].keys())
+        self.lang, self.lang_ids = self._tranform_des()
+        self._build_frequency()
 
         # add scannet data
         self.scene_list = sorted(list(set([data["scene_id"] for data in self.scanrefer])))
