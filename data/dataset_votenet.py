@@ -68,6 +68,11 @@ class ScannetReferenceDataset(Dataset):
         object_name = " ".join(self.scanrefer[idx]["object_name"].split("_"))
         ann_id = self.scanrefer[idx]["ann_id"]
 
+        # get language features
+        lang_feat = self.lang[scene_id][str(object_id)][ann_id]
+        lang_len = len(self.scanrefer[idx]["token"]) + 2
+        lang_len = lang_len if lang_len <= CONF.TRAIN.MAX_DES_LEN + 2 else CONF.TRAIN.MAX_DES_LEN + 2
+
         # get pc
         mesh_vertices = self.scene_data[scene_id]["mesh_vertices"]
         instance_labels = self.scene_data[scene_id]["instance_labels"]
@@ -207,6 +212,9 @@ class ScannetReferenceDataset(Dataset):
 
         data_dict = {}
         data_dict["point_clouds"] = point_cloud.astype(np.float32) # point cloud data including features
+        data_dict["lang_feat"] = lang_feat.astype(np.float32) # language feature vectors
+        data_dict["lang_len"] = np.array(lang_len).astype(np.int64) # length of each description
+        data_dict["lang_ids"] = np.array(self.lang_ids[scene_id][str(object_id)][ann_id]).astype(np.int64)
         data_dict["center_label"] = target_bboxes.astype(np.float32)[:,0:3] # (MAX_NUM_OBJ, 3) for GT box center XYZ
         data_dict["heading_class_label"] = angle_classes.astype(np.int64) # (MAX_NUM_OBJ,) with int values in 0,...,NUM_HEADING_BIN-1
         data_dict["heading_residual_label"] = angle_residuals.astype(np.float32) # (MAX_NUM_OBJ,)
