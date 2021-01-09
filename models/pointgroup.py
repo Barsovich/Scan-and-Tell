@@ -142,6 +142,8 @@ class PointGroup(nn.Module):
 
         if cfg.use_coords:
             input_c += 3
+        if cfg.use_multiview:
+            input_c += 128
 
         #### backbone
         self.input_conv = spconv.SparseSequential(
@@ -172,6 +174,13 @@ class PointGroup(nn.Module):
             norm_fn(m),
             nn.ReLU()
         )
+        self.object_features_linear = nn.Sequential(
+            nn.Linear(m, 4*m, bias=True),
+            norm_fn(4*m),
+            nn.ReLU(),
+            nn.Linear(4*m, 8*m, bias=True)
+        )
+
         self.score_linear = nn.Linear(m, 1)
 
         self.apply(self.set_bn_init)
@@ -264,17 +273,17 @@ class PointGroup(nn.Module):
         output = self.input_conv(input)
         output = self.unet(output)
         output = self.output_layer(output)
-        output_feats = output.features[input_map.long()]
+        output_feats = output.features[input_map.long()]  ## F
 
         #### semantic segmentation
         semantic_scores = self.linear(output_feats)   # (N, nClass), float
-        semantic_preds = semantic_scores.max(1)[1]    # (N), long
+        semantic_preds = semantic_scores.max(1)[1]    # (N), long   ---- S
 
         ret['semantic_scores'] = semantic_scores
 
         #### offset
         pt_offsets_feats = self.offset(output_feats)
-        pt_offsets = self.offset_linear(pt_offsets_feats)   # (N, 3), float32
+        pt_offsets = self.offset_linear(pt_offsets_feats)   # (N, 3), float32 --- O
 
         ret['pt_offsets'] = pt_offsets
 
@@ -289,12 +298,14 @@ class PointGroup(nn.Module):
 
             semantic_preds_cpu = semantic_preds[object_idxs].int().cpu()
 
+            #Q
             idx_shift, start_len_shift = pointgroup_ops.ballquery_batch_p(coords_ + pt_offsets_, batch_idxs_, batch_offsets_, self.cluster_radius, self.cluster_shift_meanActive)
             proposals_idx_shift, proposals_offset_shift = pointgroup_ops.bfs_cluster(semantic_preds_cpu, idx_shift.cpu(), start_len_shift.cpu(), self.cluster_npoint_thre)
             proposals_idx_shift[:, 1] = object_idxs[proposals_idx_shift[:, 1].long()].int()
             # proposals_idx_shift: (sumNPoint, 2), int, dim 0 for cluster_id, dim 1 for corresponding point idxs in N
             # proposals_offset_shift: (nProposal + 1), int
 
+            #P
             idx, start_len = pointgroup_ops.ballquery_batch_p(coords_, batch_idxs_, batch_offsets_, self.cluster_radius, self.cluster_meanActive)
             proposals_idx, proposals_offset = pointgroup_ops.bfs_cluster(semantic_preds_cpu, idx.cpu(), start_len.cpu(), self.cluster_npoint_thre)
             proposals_idx[:, 1] = object_idxs[proposals_idx[:, 1].long()].int()
@@ -316,7 +327,10 @@ class PointGroup(nn.Module):
             score_feats = pointgroup_ops.roipool(score_feats, proposals_offset.cuda())  # (nProposal, C)
             scores = self.score_linear(score_feats)  # (nProposal, 1)
 
+            object_feats = self.object_features_linear(score_feats)
+
             ret['proposal_scores'] = (scores, proposals_idx, proposals_offset)
+            ret['proposals_feats'] = object_feats
 
         return ret
 
@@ -390,7 +404,7 @@ def model_fn_decorator(test=False):
         spatial_shape = batch['spatial_shape']
 
         if cfg.use_coords:
-            feats = torch.cat((feats, coords_float), 1)
+            feats = torch.cat((coords_float, feats), 1)
         voxel_feats = pointgroup_ops.voxelization(feats, v2p_map, cfg.mode)  # (M, C), float, cuda
 
         input_ = spconv.SparseConvTensor(voxel_feats, voxel_coords.int(), spatial_shape, cfg.batch_size)

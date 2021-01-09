@@ -9,7 +9,7 @@ DATA:
   dataset: scannet_data
   filename_suffix: _pointgroup.pth
 
-  classes: 18
+  classes: 37
   ignore_label: -100
 
   input_channel: 3
@@ -26,9 +26,13 @@ STRUCTURE:
   block_reps: 2
 
   use_coords: True
+  use_multiview: False
+  no_caption: True
+  TRAIN.MAX_DES_LEN: 30
+
 
 TRAIN:
-  epochs: 12
+  epochs: 384
   train_workers: 16 # data loader workers
   optim: Adam # Adam or SGD
   lr: 0.001
@@ -57,11 +61,11 @@ GROUP:
   cluster_shift_meanActive: 300
   cluster_npoint_thre: 50
 
-  prepare_epochs: 10
+  prepare_epochs: 128
 
 TEST:
   split: val
-  test_epoch: 12
+  test_epoch: 384
   test_workers: 16
   test_seed: 567
 
