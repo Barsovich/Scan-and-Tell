@@ -13,6 +13,10 @@ from config.config_pointgroup import cfg
 from utils.log import logger
 import utils.utils_pointgroup as utils
 
+SCANREFER_TRAIN = json.load(open(os.path.join('data', "ScanRefer_filtered_train.json")))
+SCANREFER_VAL = json.load(open(os.path.join('data', "ScanRefer_filtered_val.json")))
+
+
 def init():
     # copy important files to backup
     backup_dir = os.path.join(cfg.exp_path, 'backup_files')
@@ -34,6 +38,53 @@ def init():
     np.random.seed(cfg.manual_seed)
     torch.manual_seed(cfg.manual_seed)
     torch.cuda.manual_seed_all(cfg.manual_seed)
+
+def get_scannet_scene_list(split):
+    scene_list = sorted([line.rstrip() for line in open(os.path.join(cfg.data_root,'meta_data', "scannetv2_{}.txt".format(split)))])
+
+    return scene_list
+
+def get_scanrefer(scanrefer_train, scanrefer_val, num_scenes):
+    if cfg.no_caption:
+        train_scene_list = get_scannet_scene_list("train")
+        new_scanrefer_train = []
+        for scene_id in train_scene_list:
+            data = deepcopy(SCANREFER_TRAIN[0])
+            data["scene_id"] = scene_id
+            new_scanrefer_train.append(data)
+
+        val_scene_list = get_scannet_scene_list("val")
+        new_scanrefer_val = []
+        for scene_id in val_scene_list:
+            data = deepcopy(SCANREFER_VAL[0])
+            data["scene_id"] = scene_id
+            new_scanrefer_val.append(data)
+    else:
+        # get initial scene list
+        train_scene_list = sorted(list(set([data["scene_id"] for data in scanrefer_train])))
+        val_scene_list = sorted(list(set([data["scene_id"] for data in scanrefer_val])))
+        if num_scenes == -1: 
+            num_scenes = len(train_scene_list)
+        else:
+            assert len(train_scene_list) >= num_scenes
+        
+        # slice train_scene_list
+        train_scene_list = train_scene_list[:num_scenes]
+
+        # filter data in chosen scenes
+        new_scanrefer_train = []
+        for data in scanrefer_train:
+            if data["scene_id"] in train_scene_list:
+                new_scanrefer_train.append(data)
+
+        new_scanrefer_val = scanrefer_val
+
+    # all scanrefer scene
+    all_scene_list = train_scene_list + val_scene_list
+
+    print("train on {} samples and val on {} samples".format(len(new_scanrefer_train), len(new_scanrefer_val)))
+
+    return new_scanrefer_train, new_scanrefer_val, all_scene_list
 
 def train_epoch(train_loader, model, model_fn, optimizer, epoch):
     iter_time = utils.AverageMeter()
@@ -163,8 +214,13 @@ if __name__ == '__main__':
     ##### dataset
     if cfg.dataset == 'scannet_data':
         if data_name == 'scannet':
+            scanrefer_train, scanrefer_val, all_scene_list = get_scanrefer(SCANREFER_TRAIN, SCANREFER_VAL, -1)
+            scanrefer = {
+                "train": scanrefer_train,
+                "val": scanrefer_val
+            }
             import data.dataset_pointgroup
-            dataset = data.dataset_pointgroup.Dataset()
+            dataset = data.dataset_pointgroup.Dataset(scanrefer)
             dataset.trainLoader()
             dataset.valLoader()
         else:
