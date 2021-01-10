@@ -117,12 +117,16 @@ class ScannetReferenceDataset(Dataset):
         angle_residuals = np.zeros((MAX_NUM_OBJ,))
         size_classes = np.zeros((MAX_NUM_OBJ,))
         size_residuals = np.zeros((MAX_NUM_OBJ, 3))
+
+
         ref_box_label = np.zeros(MAX_NUM_OBJ) # bbox label for reference target
         ref_center_label = np.zeros(3) # bbox center for reference target
         ref_heading_class_label = 0
         ref_heading_residual_label = 0
         ref_size_class_label = 0
         ref_size_residual_label = np.zeros(3) # bbox size residual for reference target
+        ref_box_corner_label = np.zeros((8, 3))
+
 
         if self.split != "test":
             num_bbox = instance_bboxes.shape[0] if instance_bboxes.shape[0] < MAX_NUM_OBJ else MAX_NUM_OBJ
@@ -197,35 +201,59 @@ class ScannetReferenceDataset(Dataset):
                     ref_heading_residual_label = angle_residuals[i]
                     ref_size_class_label = size_classes[i]
                     ref_size_residual_label = size_residuals[i]
+
+                    # construct ground truth box corner coordinates
+                    ref_obb = DC.param2obb(ref_center_label, ref_heading_class_label, ref_heading_residual_label, 
+                        ref_size_class_label, ref_size_residual_label)
+                    ref_box_corner_label = get_3d_box(ref_obb[3:6], ref_obb[6], ref_obb[0:3])
+
+
+                    # construct all GT bbox corners
+                all_obb = DC.param2obb_batch(target_bboxes[:num_bbox, 0:3], angle_classes[:num_bbox].astype(np.int64), angle_residuals[:num_bbox],
+                                        size_classes[:num_bbox].astype(np.int64), size_residuals[:num_bbox])
+                all_box_corner_label = get_3d_box_batch(all_obb[:, 3:6], all_obb[:, 6], all_obb[:, 0:3])
+                
+                # store
+                gt_box_corner_label = np.zeros((MAX_NUM_OBJ, 8, 3))
+                gt_box_masks = np.zeros((MAX_NUM_OBJ,))
+                gt_box_object_ids = np.zeros((MAX_NUM_OBJ,))
+
+                gt_box_corner_label[:num_bbox] = all_box_corner_label
+                gt_box_masks[:num_bbox] = 1
+                gt_box_object_ids[:num_bbox] = instance_bboxes[:, -1]
         else:
             num_bbox = 1
             point_votes = np.zeros([self.num_points, 9]) # make 3 votes identical 
             point_votes_mask = np.zeros(self.num_points)
 
         target_bboxes_semcls = np.zeros((MAX_NUM_OBJ))
+        target_object_ids = np.zeros((MAX_NUM_OBJ,)) # object ids of all objects
         try:
             target_bboxes_semcls[0:num_bbox] = [DC.nyu40id2class[int(x)] for x in instance_bboxes[:,-2][0:num_bbox]]
+            target_object_ids[0:num_bbox] = instance_bboxes[:, -1][0:num_bbox]
         except KeyError:
             pass
 
         object_cat = self.raw2label[object_name] if object_name in self.raw2label else 17
 
         data_dict = {}
-        data_dict["point_clouds"] = point_cloud.astype(np.float32) # point cloud data including features
-        data_dict["lang_feat"] = lang_feat.astype(np.float32) # language feature vectors
-        data_dict["lang_len"] = np.array(lang_len).astype(np.int64) # length of each description
-        data_dict["lang_ids"] = np.array(self.lang_ids[scene_id][str(object_id)][ann_id]).astype(np.int64)
-        data_dict["center_label"] = target_bboxes.astype(np.float32)[:,0:3] # (MAX_NUM_OBJ, 3) for GT box center XYZ
-        data_dict["heading_class_label"] = angle_classes.astype(np.int64) # (MAX_NUM_OBJ,) with int values in 0,...,NUM_HEADING_BIN-1
-        data_dict["heading_residual_label"] = angle_residuals.astype(np.float32) # (MAX_NUM_OBJ,)
-        data_dict["size_class_label"] = size_classes.astype(np.int64) # (MAX_NUM_OBJ,) with int values in 0,...,NUM_SIZE_CLUSTER
-        data_dict["size_residual_label"] = size_residuals.astype(np.float32) # (MAX_NUM_OBJ, 3)
-        data_dict["num_bbox"] = np.array(num_bbox).astype(np.int64)
-        data_dict["sem_cls_label"] = target_bboxes_semcls.astype(np.int64) # (MAX_NUM_OBJ,) semantic class index
+        data_dict["point_clouds"] = point_cloud.astype(np.float32) # point cloud data including features    [B,max_num_points,3]
+        data_dict["lang_feat"] = lang_feat.astype(np.float32) # language feature vectors     [B,32,300]
+        data_dict["lang_len"] = np.array(lang_len).astype(np.int64) # length of each description    [B]
+        data_dict["lang_ids"] = np.array(self.lang_ids[scene_id][str(object_id)][ann_id]).astype(np.int64) #     [B,32,300]
+        #all data with MAX_NUM_OBJ are mostly filled with zeros
+        data_dict["center_label"] = target_bboxes.astype(np.float32)[:,0:3] # (MAX_NUM_OBJ, 3) for GT box center XYZ  # [B,128,3]
+        data_dict["heading_class_label"] = angle_classes.astype(np.int64) # (MAX_NUM_OBJ,) with int values in 0,...,NUM_HEADING_BIN-1  [B,128]
+        data_dict["heading_residual_label"] = angle_residuals.astype(np.float32) # (MAX_NUM_OBJ,) [B,128]
+        data_dict["size_class_label"] = size_classes.astype(np.int64) # (MAX_NUM_OBJ,) with int values in 0,...,NUM_SIZE_CLUSTER  [B,128]
+        data_dict["size_residual_label"] = size_residuals.astype(np.float32) # (MAX_NUM_OBJ, 3) [B,128,3]
+        data_dict["num_bbox"] = np.array(num_bbox).astype(np.int64) # [B]
+        data_dict["sem_cls_label"] = target_bboxes_semcls.astype(np.int64) # (MAX_NUM_OBJ,) semantic class index  
+        data_dict["scene_object_ids"] = target_object_ids.astype(np.int64) # (MAX_NUM_OBJ,) object ids of all objects
         data_dict["box_label_mask"] = target_bboxes_mask.astype(np.float32) # (MAX_NUM_OBJ) as 0/1 with 1 indicating a unique box
-        data_dict["vote_label"] = point_votes.astype(np.float32)
-        data_dict["vote_label_mask"] = point_votes_mask.astype(np.int64)
-        data_dict["scan_idx"] = np.array(idx).astype(np.int64)
+        data_dict["vote_label"] = point_votes.astype(np.float32) # [B,40000,9]
+        data_dict["vote_label_mask"] = point_votes_mask.astype(np.int64) # [B,40000]
+        data_dict["scan_idx"] = np.array(idx).astype(np.int64) # [B] object indices from self.scanrefer
         data_dict["pcl_color"] = pcl_color
         data_dict["ref_box_label"] = ref_box_label.astype(np.int64) # 0/1 reference labels for each object bbox
         data_dict["ref_center_label"] = ref_center_label.astype(np.float32)
@@ -233,11 +261,15 @@ class ScannetReferenceDataset(Dataset):
         data_dict["ref_heading_residual_label"] = np.array(int(ref_heading_residual_label)).astype(np.int64)
         data_dict["ref_size_class_label"] = np.array(int(ref_size_class_label)).astype(np.int64)
         data_dict["ref_size_residual_label"] = ref_size_residual_label.astype(np.float32)
-        data_dict["object_id"] = np.array(int(object_id)).astype(np.int64)
-        data_dict["ann_id"] = np.array(int(ann_id)).astype(np.int64)
-        data_dict["object_cat"] = np.array(object_cat).astype(np.int64)
+        data_dict["ref_box_corner_label"] = ref_box_corner_label.astype(np.float64) # target box corners NOTE type must be 
+        data_dict["gt_box_corner_label"] = gt_box_corner_label.astype(np.float64) # all GT box corners NOTE type must be double
+        data_dict["gt_box_masks"] = gt_box_masks.astype(np.int64) # valid bbox masks
+        data_dict["gt_box_object_ids"] = gt_box_object_ids.astype(np.int64) # valid bbox object ids
+        data_dict["object_id"] = np.array(int(object_id)).astype(np.int64) # [B] target object_ids
+        data_dict["ann_id"] = np.array(int(ann_id)).astype(np.int64) # [B]
+        data_dict["object_cat"] = np.array(object_cat).astype(np.int64) # [B] target object classes 
         data_dict["unique_multiple"] = np.array(self.unique_multiple_lookup[scene_id][str(object_id)][ann_id]).astype(np.int64)
-        data_dict["pcl_color"] = pcl_color
+        data_dict["pcl_color"] = pcl_color # [B,40000,3]
         data_dict["load_time"] = time.time() - start
 
         return data_dict
