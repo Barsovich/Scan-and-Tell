@@ -16,6 +16,16 @@ import utils.utils_pointgroup as utils
 import utils.pointgroup.eval as eval
 import lib.ap_helper as ap_helper
 
+def remap_semantic_ids(sematic_ids):
+    semantic_label_idx = [3,4,5,6,7,8,9,10,11,12,14,16,24,28,33,34,36,39]
+    remapper = np.ones(40) * (-100)
+    for i, x in enumerate(semantic_label_idx):
+        remapper[x] = i
+    remapped_labels = np.zeros(sematic_ids.shape)
+    for i, l in enumerate(sematic_ids):
+        remapped_labels[i] = remapper[l]
+    return remapped_labels
+
 def init():
     global result_dir
     result_dir = os.path.join(cfg.exp_path, 'result', 'epoch{}_nmst{}_scoret{}_npointt{}'.format(cfg.test_epoch, cfg.TEST_NMS_THRESH, cfg.TEST_SCORE_THRESH, cfg.TEST_NPOINT_THRESH), cfg.split)
@@ -55,6 +65,10 @@ def test(model, model_fn, data_name, epoch):
         start = time.time()
 
         matches = {}
+
+        AP_IOU_THRESHOLDS = [0.25, 0.5]
+        AP_CALCULATOR_LIST = [ap_helper.APCalculator(iou_thresh, point_group=True) for iou_thresh in AP_IOU_THRESHOLDS]
+
         for i, batch in enumerate(dataloader):
             N = batch['feats'].shape[0]
             test_scene_name = dataset.test_file_names[int(batch['id'][0])].split('/')[-1][:12]
@@ -119,20 +133,12 @@ def test(model, model_fn, data_name, epoch):
                 gt_cluster_count = instance_pointnum.shape[0]
                 
                 # calculate AP
-                pred_bboxes = ap_helper.calculate_pred_bboxes_pointgroup(coords, clusters, cluster_semantic_id, cluster_scores)
+                remapped_semantic_ids = remap_semantic_ids(cluster_semantic_id)
+                pred_bboxes = ap_helper.calculate_pred_bboxes_pointgroup(coords, clusters, remapped_semantic_ids, cluster_scores)
                 gt_bboxes = ap_helper.calculate_gt_bboxes_pointgroup(coords, labels, instance_labels, gt_cluster_count)
-                AP_IOU_THRESHOLDS = [0.25, 0.5]
-                AP_CALCULATOR_LIST = [ap_helper.APCalculator(iou_thresh, point_group=True) for iou_thresh in AP_IOU_THRESHOLDS]
+
                 for ap_calculator in AP_CALCULATOR_LIST:
                     ap_calculator.step(pred_bboxes, gt_bboxes)
-
-                # report results
-                for i, ap_calculator in enumerate(AP_CALCULATOR_LIST):
-                    print()
-                    print("-"*10, "iou_thresh: %f"%(AP_IOU_THRESHOLDS[i]), "-"*10)
-                    metrics_dict = ap_calculator.compute_metrics()
-                    for key in metrics_dict:
-                        print("eval %s: %f"%(key, metrics_dict[key]))
 
                 ##### prepare for evaluation
                 if cfg.eval:
@@ -145,6 +151,7 @@ def test(model, model_fn, data_name, epoch):
                     matches[test_scene_name] = {}
                     matches[test_scene_name]['gt'] = gt2pred
                     matches[test_scene_name]['pred'] = pred2gt
+
 
             ##### save files
             start3 = time.time()
@@ -183,6 +190,13 @@ def test(model, model_fn, data_name, epoch):
         if cfg.eval:
             ap_scores = eval.evaluate_matches(matches)
             avgs = eval.compute_averages(ap_scores)
+            # report bounding box mAP and recall
+            for i, ap_calculator in enumerate(AP_CALCULATOR_LIST):
+                print()
+                print("-" * 10, "iou_thresh: %f" % (AP_IOU_THRESHOLDS[i]), "-" * 10)
+                metrics_dict = ap_calculator.compute_metrics()
+                for key in metrics_dict:
+                    print("eval %s: %f" % (key, metrics_dict[key]))
             eval.print_results(avgs)
 
 
