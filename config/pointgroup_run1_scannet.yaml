@@ -28,7 +28,7 @@ STRUCTURE:
   use_coords: True
   use_multiview: False
   no_caption: True
-  TRAIN.MAX_DES_LEN: 30
+  TRAIN_MAX_DES_LEN: 30
 
 
 TRAIN:

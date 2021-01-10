@@ -3,6 +3,8 @@ import scipy.ndimage
 import scipy.interpolate
 import torch
 import h5py
+import pickle
+import json
 import multiprocessing as mp
 
 from itertools import chain
@@ -11,7 +13,7 @@ from torch.utils.data import DataLoader
 
 sys.path.append('../')
 
-from cfgig.cfgig_pointgroup import cfg
+from config.config_pointgroup import cfg
 from utils.log import logger
 from lib.pointgroup_ops.functions import pointgroup_ops
 
@@ -26,7 +28,7 @@ class Dataset:
         self.dataset = cfg.dataset
         self.filename_suffix = cfg.filename_suffix
 
-        self.train_data = scanrefer['train'] #list of dictionaries, len: 36665 (total number of scanrefer train objects)
+        self.train_data = scanrefer['train'] #list of dictionaries, len: 36665 if caption (total number of scanrefer train objects)
         self.val_data = scanrefer['val'] #list of dictionaries
         self.scanrefer = scanrefer['train'] + scanrefer['val']
 
@@ -205,12 +207,12 @@ class Dataset:
                 label[scene_id][object_id][ann_id] = {}
 
             # trim long descriptions
-            tokens = data["token"][:cfg.TRAIN.MAX_DES_LEN]
+            tokens = data["token"][:cfg.TRAIN_MAX_DES_LEN]
 
             # tokenize the description
             tokens = ["sos"] + tokens + ["eos"]
-            embeddings = np.zeros((cfg.TRAIN.MAX_DES_LEN + 2, 300))
-            labels = np.zeros((cfg.TRAIN.MAX_DES_LEN + 2)) # start and end
+            embeddings = np.zeros((cfg.TRAIN_MAX_DES_LEN + 2, 300))
+            labels = np.zeros((cfg.TRAIN_MAX_DES_LEN + 2)) # start and end
 
             # load
             for token_id in range(len(tokens)):
@@ -232,7 +234,7 @@ class Dataset:
         if os.path.exists(SCANREFER_VOCAB):
             self.vocabulary = json.load(open(SCANREFER_VOCAB))
         else:
-            all_words = chain(*[data["token"][:cfg.TRAIN.MAX_DES_LEN] for data in self.train_data])
+            all_words = chain(*[data["token"][:cfg.TRAIN_MAX_DES_LEN] for data in self.train_data])
             word_counter = Counter(all_words)
             word_counter = sorted([(k, v) for k, v in word_counter.items() if k in self.glove], key=lambda x: x[1], reverse=True)
             word_list = [k for k, _ in word_counter]
@@ -319,7 +321,7 @@ class Dataset:
             #get language features
             lang_feat = self.lang[scene_id][str(object_id)][ann_id]
             lang_len = len(self.scanrefer[idx]["token"]) + 2
-            lang_len = lang_len if lang_len <= cfg.TRAIN.MAX_DES_LEN + 2 else cfg.TRAIN.MAX_DES_LEN + 2
+            lang_len = lang_len if lang_len <= cfg.TRAIN_MAX_DES_LEN + 2 else cfg.TRAIN_MAX_DES_LEN + 2
 
             #get scene data
             data_file = os.path.join(self.data_root,self.dataset,'{}_pointgroup.pth'.format(scene_id))
@@ -356,8 +358,8 @@ class Dataset:
             total_inst_num += inst_num
 
             ### merge the scene to the batch
-            ann_ids.append(ann_id)
-            object_ids.append(object_id)
+            ann_ids.append(int(ann_id))
+            object_ids.append(int(object_id))
             batch_offsets.append(batch_offsets[-1] + xyz.shape[0])
 
             locs.append(torch.cat([torch.LongTensor(xyz.shape[0], 1).fill_(i), torch.from_numpy(xyz).long()], 1))
@@ -448,7 +450,7 @@ class Dataset:
             #get language features
             lang_feat = self.lang[scene_id][str(object_id)][ann_id]
             lang_len = len(self.scanrefer[idx]["token"]) + 2
-            lang_len = lang_len if lang_len <= cfg.TRAIN.MAX_DES_LEN + 2 else cfg.TRAIN.MAX_DES_LEN + 2
+            lang_len = lang_len if lang_len <= cfg.TRAIN_MAX_DES_LEN + 2 else cfg.TRAIN_MAX_DES_LEN + 2
 
             #get scene data
             data_file = os.path.join(self.data_root,self.dataset,'{}_pointgroup.pth'.format(scene_id))
@@ -481,8 +483,8 @@ class Dataset:
             total_inst_num += inst_num
 
             ### merge the scene to the batch
-            ann_ids.append(ann_id)
-            object_ids.append(object_id)
+            ann_ids.append(int(ann_id))
+            object_ids.append(int(object_id))
             batch_offsets.append(batch_offsets[-1] + xyz.shape[0])
 
             locs.append(torch.cat([torch.LongTensor(xyz.shape[0], 1).fill_(i), torch.from_numpy(xyz).long()], 1))
