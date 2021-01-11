@@ -17,7 +17,7 @@ from data.scannet.model_util_scannet import ScannetDatasetConfig
 from data.dataset_votenet import ScannetReferenceDataset
 from lib.solver import Solver
 from config.config_votenet import CONF
-from models.scene_capnet import CapNet
+from models.capnet import CapNet
 
 SCANREFER_TRAIN = json.load(open(os.path.join(CONF.PATH.DATA, "ScanRefer_filtered_train.json")))
 SCANREFER_VAL = json.load(open(os.path.join(CONF.PATH.DATA, "ScanRefer_filtered_val.json")))

@@ -9,11 +9,12 @@ import numpy as np
 import sys
 import os
 
-sys.path.append('../') # HACK add the root folder
+sys.path.append(os.path.join(os.getcwd())) # HACK add the root folder
 from utils.nn_distance import nn_distance, huber_loss
 from lib.ap_helper import parse_predictions
 from lib.loss import SoftmaxRankingLoss
 from utils.box_util import get_3d_box, get_3d_box_batch, box3d_iou, box3d_iou_batch
+from config.config_votenet import CONF
 
 FAR_THRESHOLD = 0.6
 NEAR_THRESHOLD = 0.3
@@ -41,21 +42,21 @@ def compute_vote_loss(data_dict):
             min(d(v_i,c_j)) for i=1,2,3 and j=1,2,3
     """
 
-    # Load ground truth votes and assign them to seed points
-    batch_size = data_dict['seed_xyz'].shape[0]
-    num_seed = data_dict['seed_xyz'].shape[1] # B,num_seed,3
-    vote_xyz = data_dict['vote_xyz'] # B,num_seed*vote_factor,3
-    seed_inds = data_dict['seed_inds'].long() # B,num_seed in [0,num_points-1]
+   # Load ground truth votes and assign them to seed points
+    batch_size = data_dict["seed_xyz"].shape[0]
+    num_seed = data_dict["seed_xyz"].shape[1] # B,num_seed,3
+    vote_xyz = data_dict["vote_xyz"] # B,num_seed*vote_factor,3
+    seed_inds = data_dict["seed_inds"].long() # B,num_seed in [0,num_points-1]
 
     # Get groundtruth votes for the seed points
     # vote_label_mask: Use gather to select B,num_seed from B,num_point
     #   non-object point has no GT vote mask = 0, object point has mask = 1
     # vote_label: Use gather to select B,num_seed,9 from B,num_point,9
     #   with inds in shape B,num_seed,9 and 9 = GT_VOTE_FACTOR * 3
-    seed_gt_votes_mask = torch.gather(data_dict['vote_label_mask'], 1, seed_inds)
+    seed_gt_votes_mask = torch.gather(data_dict["vote_label_mask"], 1, seed_inds)
     seed_inds_expand = seed_inds.view(batch_size,num_seed,1).repeat(1,1,3*GT_VOTE_FACTOR)
-    seed_gt_votes = torch.gather(data_dict['vote_label'], 1, seed_inds_expand)
-    seed_gt_votes += data_dict['seed_xyz'].repeat(1,1,3)
+    seed_gt_votes = torch.gather(data_dict["vote_label"], 1, seed_inds_expand)
+    seed_gt_votes += data_dict["seed_xyz"].repeat(1,1,3)
 
     # Compute the min of min of distance
     vote_xyz_reshape = vote_xyz.view(batch_size*num_seed, -1, 3) # from B,num_seed*vote_factor,3 to B*num_seed,vote_factor,3
@@ -184,6 +185,163 @@ def compute_box_and_sem_cls_loss(data_dict, config):
     sem_cls_loss = torch.sum(sem_cls_loss * objectness_label)/(torch.sum(objectness_label)+1e-6)
 
     return center_loss, heading_class_loss, heading_residual_normalized_loss, size_class_loss, size_residual_normalized_loss, sem_cls_loss
+
+def compute_cap_loss(data_dict, config, weights):
+    """ Compute cluster caption loss
+
+    Args:
+        data_dict: dict (read-only)
+
+    Returns:
+        cap_loss, cap_acc
+    """
+
+    # unpack
+    pred_caps = data_dict["lang_cap"] # (B, num_words - 1, num_vocabs)
+    num_words = data_dict["lang_len"][0]
+    target_caps = data_dict["lang_ids"][:, 1:num_words] # (B, num_words - 1)
+    
+    _, _, num_vocabs = pred_caps.shape
+
+    # caption loss
+    criterion = nn.CrossEntropyLoss(ignore_index=0, reduction="none")
+    cap_loss = criterion(pred_caps.reshape(-1, num_vocabs), target_caps.reshape(-1))
+
+    # mask out bad boxes
+    good_bbox_masks = data_dict["good_bbox_masks"].unsqueeze(1).repeat(1, num_words-1) # (B, num_words - 1)
+    good_bbox_masks = good_bbox_masks.reshape(-1) # (B * num_words - 1)
+    cap_loss = torch.sum(cap_loss * good_bbox_masks) / (torch.sum(good_bbox_masks) + 1e-6)
+
+    num_good_bbox = data_dict["good_bbox_masks"].sum()
+    if num_good_bbox > 0: # only apply loss on the good boxes
+        pred_caps = pred_caps[data_dict["good_bbox_masks"]] # num_good_bbox
+        target_caps = target_caps[data_dict["good_bbox_masks"]] # num_good_bbox
+
+        # caption acc
+        pred_caps = pred_caps.reshape(-1, num_vocabs).argmax(-1) # num_good_bbox * (num_words - 1)
+        target_caps = target_caps.reshape(-1) # num_good_bbox * (num_words - 1)
+        masks = target_caps != 0
+        masked_pred_caps = pred_caps[masks]
+        masked_target_caps = target_caps[masks]
+        cap_acc = (masked_pred_caps == masked_target_caps).sum().float() / masks.sum().float()
+    else: # zero placeholder if there is no good box
+        cap_acc = torch.zeros(1)[0].cuda()
+    
+    return cap_loss, cap_acc
+
+    def get_scene_cap_loss(data_dict, device, config, weights, 
+    detection=True, caption=True, orientation=False, distance=False, num_bins=CONF.TRAIN.NUM_BINS):
+    """ Loss functions
+
+    Args:
+        data_dict: dict
+        config: dataset config instance
+        reference: flag (False/True)
+    Returns:
+        loss: pytorch scalar tensor
+        data_dict: dict
+    """
+
+    # Vote loss
+    vote_loss = compute_vote_loss(data_dict)
+
+    # Obj loss
+    objectness_loss, objectness_label, objectness_mask, object_assignment = compute_objectness_loss(data_dict)
+    num_proposal = objectness_label.shape[1]
+    total_num_proposal = objectness_label.shape[0]*objectness_label.shape[1]
+    data_dict["objectness_label"] = objectness_label
+    data_dict["objectness_mask"] = objectness_mask
+    data_dict["object_assignment"] = object_assignment
+    data_dict["pos_ratio"] = torch.sum(objectness_label.float().to(device))/float(total_num_proposal)
+    data_dict["neg_ratio"] = torch.sum(objectness_mask.float())/float(total_num_proposal) - data_dict["pos_ratio"]
+
+    # Box loss and sem cls loss
+    center_loss, heading_cls_loss, heading_reg_loss, size_cls_loss, size_reg_loss, sem_cls_loss = compute_box_and_sem_cls_loss(data_dict, config)
+    box_loss = center_loss + 0.1*heading_cls_loss + heading_reg_loss + 0.1*size_cls_loss + size_reg_loss
+
+    # objectness
+    obj_pred_val = torch.argmax(data_dict["objectness_scores"], 2) # B,K
+    obj_acc = torch.sum((obj_pred_val==data_dict["objectness_label"].long()).float()*data_dict["objectness_mask"])/(torch.sum(data_dict["objectness_mask"])+1e-6)
+    data_dict["obj_acc"] = obj_acc
+
+    if detection:
+        data_dict["vote_loss"] = vote_loss
+        data_dict["objectness_loss"] = objectness_loss
+        data_dict["center_loss"] = center_loss
+        data_dict["heading_cls_loss"] = heading_cls_loss
+        data_dict["heading_reg_loss"] = heading_reg_loss
+        data_dict["size_cls_loss"] = size_cls_loss
+        data_dict["size_reg_loss"] = size_reg_loss
+        data_dict["sem_cls_loss"] = sem_cls_loss
+        data_dict["box_loss"] = box_loss
+    else:
+        data_dict["vote_loss"] = torch.zeros(1)[0].to(device)
+        data_dict["objectness_loss"] = torch.zeros(1)[0].to(device)
+        data_dict["center_loss"] = torch.zeros(1)[0].to(device)
+        data_dict["heading_cls_loss"] = torch.zeros(1)[0].to(device)
+        data_dict["heading_reg_loss"] = torch.zeros(1)[0].to(device)
+        data_dict["size_cls_loss"] = torch.zeros(1)[0].to(device)
+        data_dict["size_reg_loss"] = torch.zeros(1)[0].to(device)
+        data_dict["sem_cls_loss"] = torch.zeros(1)[0].to(device)
+        data_dict["box_loss"] = torch.zeros(1)[0].to(device)
+
+    if caption:
+        cap_loss, cap_acc = compute_cap_loss(data_dict, config, weights)
+
+        # store
+        data_dict["cap_loss"] = cap_loss
+        data_dict["cap_acc"] = cap_acc
+    else:
+        # store
+        data_dict["cap_loss"] = torch.zeros(1)[0].to(device)
+        data_dict["cap_acc"] = torch.zeros(1)[0].to(device)
+        data_dict["pred_ious"] =  torch.zeros(1)[0].to(device)
+
+    if orientation:
+        pass
+        # ori_loss, ori_acc = compute_node_orientation_loss(data_dict, num_bins)
+
+        # # store
+        # data_dict["ori_loss"] = ori_loss
+        # data_dict["ori_acc"] = ori_acc
+    else:
+        # store
+        data_dict["ori_loss"] = torch.zeros(1)[0].to(device)
+        data_dict["ori_acc"] = torch.zeros(1)[0].to(device)
+
+    if distance:
+        pass
+        # dist_loss = compute_node_distance_loss(data_dict)
+
+        # # store
+        # data_dict["dist_loss"] = dist_loss
+    else:
+        # store
+        data_dict["dist_loss"] = torch.zeros(1)[0].to(device)
+
+    # Final loss function
+    # loss = data_dict["vote_loss"] + 0.5*data_dict["objectness_loss"] + data_dict["box_loss"] + 0.1*data_dict["sem_cls_loss"] + data_dict["cap_loss"]
+
+    if detection:
+        loss = data_dict["vote_loss"] + 0.5*data_dict["objectness_loss"] + data_dict["box_loss"] + 0.1*data_dict["sem_cls_loss"]
+        loss *= 10 # amplify
+        if caption:
+            loss += data_dict["cap_loss"]
+        if orientation:
+            loss += 0.1*data_dict["ori_loss"]
+        if distance:
+            loss += 0.1*data_dict["dist_loss"]
+            # loss += data_dict["dist_loss"]
+    else:
+        loss = data_dict["cap_loss"]
+        if orientation:
+            loss += 0.1*data_dict["ori_loss"]
+        if distance:
+            loss += 0.1*data_dict["dist_loss"]
+
+    data_dict["loss"] = loss
+
+    return data_dict
 
 def get_loss(data_dict, config, detection=True, caption=False,use_lang_classifier=False):
     """ Loss functions
