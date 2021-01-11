@@ -74,7 +74,7 @@ class AttentionModule(nn.Module):
 		self.W_h = nn.Linear(self.hidden_size,self.num_features,bias=False)
 		self.W_a = nn.Linear(self.num_features,1,bias=False)
 
-		if not self.RG:
+		
 
 
 	def forward(self,h,V_r=None):

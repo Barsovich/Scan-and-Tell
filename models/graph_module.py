@@ -20,7 +20,7 @@ class MessagePassingLayer(nn.Module):
             nn.Linear(self.output_dim,self.output_dim)
             )
 
-     def forward(self,raw_E):
+    def forward(self,raw_E):
         """
         Arguments:
             raw_E: [batch_size,num_objects,num_objects,2 * num_features] object relations before message passing

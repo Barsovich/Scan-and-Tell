@@ -9,7 +9,7 @@ from models.backbone_module import Pointnet2Backbone
 from models.voting_module import VotingModule
 from models.proposal_module import ProposalModule
 from models.graph_module import GraphModule
-from models.caption_module import PlainCapModule, AttentionCapModule, SceneCaptionModule
+from models.captioning_module import PlainCapModule, AttentionCapModule, SceneCaptionModule
 
 
 class CapNet(nn.Module):

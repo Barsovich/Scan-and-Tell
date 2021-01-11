@@ -76,7 +76,7 @@ BEST_REPORT_TEMPLATE = """
 
 class Solver():
     def __init__(self, model, device, config, dataset, dataloader, optimizer, stamp, val_step=10, 
-    detection=True, caption=True, orientation=False, distance=False, use_tf=True, report_ap=False
+    detection=True, caption=True, orientation=False, distance=False, use_tf=True, report_ap=False,
     lr_decay_step=None, lr_decay_rate=None, bn_decay_step=None, bn_decay_rate=None,
     criterion="meteor"):
 

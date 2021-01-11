@@ -25,7 +25,7 @@ SCANREFER_VAL = json.load(open(os.path.join(CONF.PATH.DATA, "ScanRefer_filtered_
 # constants
 DC = ScannetDatasetConfig()
 
-def get_dataloader(args, scanrefer, all_scene_list, split, config, augment):
+def get_dataloader(args, scanrefer, all_scene_list, split, config, augment,scan2cad_rotation=None):
     dataset = ScannetReferenceDataset(
         scanrefer=scanrefer, 
         scanrefer_all_scene=all_scene_list, 
@@ -35,14 +35,15 @@ def get_dataloader(args, scanrefer, all_scene_list, split, config, augment):
         use_color=args.use_color, 
         use_normal=args.use_normal, 
         use_multiview=args.use_multiview,
-        augment=augment
+        augment=augment,
+        #scan2cad_rotation=scan2cad_rotation
     )
     # dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     return dataset, dataloader
 
-def get_model(args):
+def get_model(args,dataset,device):
     # initiate model
     input_channels = int(args.use_multiview) * 128 + int(args.use_normal) * 3 + int(args.use_color) * 3 + int(not args.no_height)
     model = CapNet(
@@ -103,8 +104,8 @@ def get_model(args):
             for param in model.proposal.parameters():
                 param.requires_grad = False
     
-    # to CUDA
-    model = model.cuda()
+    # to device
+    model.to(device)
 
     return model
 
@@ -115,7 +116,8 @@ def get_num_params(model):
     return num_params
 
 def get_solver(args, dataset, dataloader):
-    model = get_model(args)
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    model = get_model(args, dataset["train"], device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.wd)
 
     if args.use_checkpoint:
@@ -201,19 +203,16 @@ def get_scanrefer(scanrefer_train, scanrefer_val):
             new_scanrefer_eval_train.append(data)
 
         val_scene_list = get_scannet_scene_list("val")
-        new_scanrefer_val = []
+        new_scanrefer_eval_val = []
         for scene_id in val_scene_list:
             data = deepcopy(SCANREFER_VAL[0])
             data["scene_id"] = scene_id
-            new_scanrefer_val.append(data)
+            new_scanrefer_eval_val.append(data)
     else:
         # get initial scene list
         train_scene_list = sorted(list(set([data["scene_id"] for data in scanrefer_train])))
         val_scene_list = sorted(list(set([data["scene_id"] for data in scanrefer_val])))
         
-        # slice train_scene_list
-        train_scene_list = train_scene_list[:num_scenes]
-
         # filter data in chosen scenes
         new_scanrefer_train = []
         for data in scanrefer_train:
@@ -247,13 +246,13 @@ def train(args):
     # init training dataset
     print("preparing data...")
     scanrefer_train, scanrefer_eval_train, scanrefer_eval_val, all_scene_list = get_scanrefer(SCANREFER_TRAIN, SCANREFER_VAL)
-    scanrefer = {
-        "train": scanrefer_train,
-        "val": scanrefer_val
-    }
+    # scanrefer = {
+    #     "train": scanrefer_train,
+    #     "val": scanrefer_val
+    # }
 
     # dataloader
-    train_dataset, train_dataloader = get_dataloader(args, scanrefer_train, all_scene_list, "train", DC, True, SCAN2CAD_ROTATION)
+    train_dataset, train_dataloader = get_dataloader(args, scanrefer_train, all_scene_list, "train", DC, True, None)
     eval_train_dataset, eval_train_dataloader = get_dataloader(args, scanrefer_eval_train, all_scene_list, "val", DC, False)
     eval_val_dataset, eval_val_dataloader = get_dataloader(args, scanrefer_eval_val, all_scene_list, "val", DC, False)
     dataset = {

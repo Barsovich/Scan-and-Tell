@@ -178,6 +178,34 @@ def box3d_iou_batch(corners1, corners2):
 
     return iou
 
+def box3d_iou_batch_tensor(corners1, corners2):
+    ''' Compute 3D bounding box IoU.
+        Note: only for axis-aligned bounding boxes
+
+    Input:
+        corners1: PyTorch tensor (N,8,3), assume up direction is Z (batch of N samples)
+        corners2: PyTorch tensor (N,8,3), assume up direction is Z (batch of N samples)
+    Output:
+        iou: an tensor of 3D bounding box IoU (N)
+
+    '''
+    
+    x_min_1, x_max_1, y_min_1, y_max_1, z_min_1, z_max_1 = get_box3d_min_max_batch_tensor(corners1)
+    x_min_2, x_max_2, y_min_2, y_max_2, z_min_2, z_max_2 = get_box3d_min_max_batch_tensor(corners2)
+    xA = torch.max(x_min_1, x_min_2)
+    yA = torch.max(y_min_1, y_min_2)
+    zA = torch.max(z_min_1, z_min_2)
+    xB = torch.min(x_max_1, x_max_2)
+    yB = torch.min(y_max_1, y_max_2)
+    zB = torch.min(z_max_1, z_max_2)
+    zeros = corners1.new_zeros(xA.shape).cuda()
+    inter_vol = torch.max((xB - xA), zeros) * torch.max((yB - yA), zeros) * torch.max((zB - zA), zeros)
+    box_vol_1 = (x_max_1 - x_min_1) * (y_max_1 - y_min_1) * (z_max_1 - z_min_1)
+    box_vol_2 = (x_max_2 - x_min_2) * (y_max_2 - y_min_2) * (z_max_2 - z_min_2)
+    iou = inter_vol / (box_vol_1 + box_vol_2 - inter_vol + 1e-8)
+
+    return iou
+
 def get_box3d_min_max_batch(corner):
     ''' Compute min and max coordinates for 3D bounding box
         Note: only for axis-aligned bounding boxes
@@ -196,6 +224,26 @@ def get_box3d_min_max_batch(corner):
     z_min, z_max = min_coord[:, 2], max_coord[:, 2]
     
     return x_min, x_max, y_min, y_max, z_min, z_max
+
+def get_box3d_min_max_batch_tensor(corner):
+    ''' Compute min and max coordinates for 3D bounding box
+        Note: only for axis-aligned bounding boxes
+
+    Input:
+        corners: PyTorch tensor (N,8,3), assume up direction is Z (batch of N samples)
+    Output:
+        box_min_max: an tensor for min and max coordinates of 3D bounding box IoU
+
+    '''
+
+    min_coord, _ = corner.min(dim=1)
+    max_coord, _ = corner.max(dim=1)
+    x_min, x_max = min_coord[:, 0], max_coord[:, 0]
+    y_min, y_max = min_coord[:, 1], max_coord[:, 1]
+    z_min, z_max = min_coord[:, 2], max_coord[:, 2]
+    
+    return x_min, x_max, y_min, y_max, z_min, z_max
+
 
 def get_iou(bb1, bb2):
     """

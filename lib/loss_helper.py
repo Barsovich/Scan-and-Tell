@@ -229,8 +229,8 @@ def compute_cap_loss(data_dict, config, weights):
     
     return cap_loss, cap_acc
 
-    def get_scene_cap_loss(data_dict, device, config, weights, 
-    detection=True, caption=True, orientation=False, distance=False, num_bins=CONF.TRAIN.NUM_BINS):
+def get_scene_cap_loss(data_dict, device, config, weights, 
+detection=True, caption=True, orientation=False, distance=False, num_bins=CONF.TRAIN.NUM_BINS):
     """ Loss functions
 
     Args:
