@@ -137,7 +137,7 @@ class ScannetReferenceDataset(Dataset):
             point_votes_mask = np.zeros(self.num_points)
 
             # ------------------------------- DATA AUGMENTATION ------------------------------        
-            if self.augment and not self.debug:
+            if self.augment:
                 if np.random.random() > 0.5:
                     # Flipping along the YZ plane
                     point_cloud[:,0] = -1 * point_cloud[:,0]

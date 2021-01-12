@@ -9,6 +9,7 @@ Last modified: Jul 2019
 from __future__ import print_function
 
 import numpy as np
+import torch
 from scipy.spatial import ConvexHull
 
 def polygon_clip(subjectPolygon, clipPolygon):

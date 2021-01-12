@@ -234,7 +234,7 @@ class Solver():
 
                 # update lr scheduler
                 if self.lr_scheduler:
-                    print("update learning rate --> {}\n".format(self.lr_scheduler.get_last_lr()))
+                    print("update learning rate --> {}\n".format(self.lr_scheduler.get_lr()))
                     self.lr_scheduler.step()
 
                 # update bn scheduler

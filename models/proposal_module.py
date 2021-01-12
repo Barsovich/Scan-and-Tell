@@ -9,9 +9,14 @@ import numpy as np
 import os
 import sys
 
-sys.path.append('../') # HACK add the root folder
+sys.path.append(os.path.join(os.getcwd(), "lib")) # HACK add the lib folder
 import lib.pointnet2.pointnet2_utils
+from data.scannet.model_util_scannet import ScannetDatasetConfig
 from lib.pointnet2.pointnet2_modules import PointnetSAModuleVotes
+from utils.box_util import get_3d_box_batch
+
+# constants
+DC = ScannetDatasetConfig()
 
 class ProposalModule(nn.Module):
     def __init__(self, num_class, num_heading_bin, num_size_cluster, mean_size_arr, num_proposal, sampling, seed_feat_dim=256):
@@ -59,7 +64,7 @@ class ProposalModule(nn.Module):
 
         # Farthest point sampling (FPS) on votes
         xyz, features, fps_inds = self.vote_aggregation(xyz, features)
-        
+
         sample_inds = fps_inds
 
         data_dict['aggregated_vote_xyz'] = xyz # (batch_size, num_proposal, 3)
@@ -71,6 +76,31 @@ class ProposalModule(nn.Module):
         data_dict = self.decode_scores(net, data_dict, self.num_class, self.num_heading_bin, self.num_size_cluster, self.mean_size_arr)
 
         return data_dict
+
+    def decode_pred_box(self, data_dict):
+        # predicted bbox
+        pred_center = data_dict["center"].detach().cpu().numpy() # (B,K,3)
+        pred_heading_class = torch.argmax(data_dict["heading_scores"], -1) # B,num_proposal
+        pred_heading_residual = torch.gather(data_dict["heading_residuals"], 2, pred_heading_class.unsqueeze(-1)) # B,num_proposal,1
+        pred_heading_class = pred_heading_class.detach().cpu().numpy() # B,num_proposal
+        pred_heading_residual = pred_heading_residual.squeeze(2).detach().cpu().numpy() # B,num_proposal
+        pred_size_class = torch.argmax(data_dict["size_scores"], -1) # B,num_proposal
+        pred_size_residual = torch.gather(data_dict["size_residuals"], 2, pred_size_class.unsqueeze(-1).unsqueeze(-1).repeat(1,1,1,3)) # B,num_proposal,1,3
+        pred_size_class = pred_size_class.detach().cpu().numpy()
+        pred_size_residual = pred_size_residual.squeeze(2).detach().cpu().numpy() # B,num_proposal,3
+
+        batch_size, num_proposals, _ = pred_center.shape
+        pred_bboxes = []
+        for i in range(batch_size):
+            # convert the bbox parameters to bbox corners
+            pred_obb_batch = DC.param2obb_batch(pred_center[i, :, 0:3], pred_heading_class[i], pred_heading_residual[i],
+                        pred_size_class[i], pred_size_residual[i])
+            pred_bbox_batch = get_3d_box_batch(pred_obb_batch[:, 3:6], pred_obb_batch[:, 6], pred_obb_batch[:, 0:3])
+            pred_bboxes.append(torch.from_numpy(pred_bbox_batch).cuda().unsqueeze(0))
+
+        pred_bboxes = torch.cat(pred_bboxes, dim=0) # batch_size, num_proposals, 8, 3
+
+        return pred_bboxes
 
     def decode_scores(self, net, data_dict, num_class, num_heading_bin, num_size_cluster, mean_size_arr):
         """
@@ -104,6 +134,11 @@ class ProposalModule(nn.Module):
         data_dict['size_residuals_normalized'] = size_residuals_normalized
         data_dict['size_residuals'] = size_residuals_normalized * torch.from_numpy(mean_size_arr.astype(np.float32)).cuda().unsqueeze(0).unsqueeze(0)
         data_dict['sem_cls_scores'] = sem_cls_scores
+        # processed box info
+        data_dict["bbox_corner"] = self.decode_pred_box(data_dict) # bounding box corner coordinates
+        data_dict["bbox_feature"] = data_dict["aggregated_vote_features"]
+        data_dict["bbox_mask"] = objectness_scores.argmax(-1)
+        data_dict['sem_cls'] = sem_cls_scores.argmax(-1)
 
         return data_dict
 

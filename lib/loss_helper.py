@@ -208,7 +208,7 @@ def compute_cap_loss(data_dict, config, weights):
     cap_loss = criterion(pred_caps.reshape(-1, num_vocabs), target_caps.reshape(-1))
 
     # mask out bad boxes
-    good_bbox_masks = data_dict["good_bbox_masks"].unsqueeze(1).repeat(1, num_words-1) # (B, num_words - 1)
+    good_bbox_masks = data_dict["good_bbox_masks"].unsqueeze(1).repeat(1, num_words-1).to(torch.float32) # (B, num_words - 1)
     good_bbox_masks = good_bbox_masks.reshape(-1) # (B * num_words - 1)
     cap_loss = torch.sum(cap_loss * good_bbox_masks) / (torch.sum(good_bbox_masks) + 1e-6)
 
