@@ -12,3 +12,4 @@ h5py
 ipykernel
 pillow<7
 trimesh
+mayavi

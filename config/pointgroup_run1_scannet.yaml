@@ -76,4 +76,4 @@ TEST:
   eval: True
   save_semantic: False
   save_pt_offsets: False
-  save_instance: False
+  save_instance: True
