@@ -207,20 +207,19 @@ class ScannetReferenceDataset(Dataset):
                         ref_size_class_label, ref_size_residual_label)
                     ref_box_corner_label = get_3d_box(ref_obb[3:6], ref_obb[6], ref_obb[0:3])
 
-
-                    # construct all GT bbox corners
-                all_obb = DC.param2obb_batch(target_bboxes[:num_bbox, 0:3], angle_classes[:num_bbox].astype(np.int64), angle_residuals[:num_bbox],
-                                        size_classes[:num_bbox].astype(np.int64), size_residuals[:num_bbox])
-                all_box_corner_label = get_3d_box_batch(all_obb[:, 3:6], all_obb[:, 6], all_obb[:, 0:3])
+            # construct all GT bbox corners
+            all_obb = DC.param2obb_batch(target_bboxes[:num_bbox, 0:3], angle_classes[:num_bbox].astype(np.int64), angle_residuals[:num_bbox],
+                                    size_classes[:num_bbox].astype(np.int64), size_residuals[:num_bbox])
+            all_box_corner_label = get_3d_box_batch(all_obb[:, 3:6], all_obb[:, 6], all_obb[:, 0:3])
                 
-                # store
-                gt_box_corner_label = np.zeros((MAX_NUM_OBJ, 8, 3))
-                gt_box_masks = np.zeros((MAX_NUM_OBJ,))
-                gt_box_object_ids = np.zeros((MAX_NUM_OBJ,))
+            # store
+            gt_box_corner_label = np.zeros((MAX_NUM_OBJ, 8, 3))
+            gt_box_masks = np.zeros((MAX_NUM_OBJ,))
+            gt_box_object_ids = np.zeros((MAX_NUM_OBJ,))
 
-                gt_box_corner_label[:num_bbox] = all_box_corner_label
-                gt_box_masks[:num_bbox] = 1
-                gt_box_object_ids[:num_bbox] = instance_bboxes[:, -1]
+            gt_box_corner_label[:num_bbox] = all_box_corner_label
+            gt_box_masks[:num_bbox] = 1
+            gt_box_object_ids[:num_bbox] = instance_bboxes[:, -1]
         else:
             num_bbox = 1
             point_votes = np.zeros([self.num_points, 9]) # make 3 votes identical 
