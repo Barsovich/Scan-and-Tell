@@ -252,7 +252,7 @@ class ScannetReferenceDataset(Dataset):
         data_dict["box_label_mask"] = target_bboxes_mask.astype(np.float32) # (MAX_NUM_OBJ) as 0/1 with 1 indicating a unique box
         data_dict["vote_label"] = point_votes.astype(np.float32) # [B,40000,9]
         data_dict["vote_label_mask"] = point_votes_mask.astype(np.int64) # [B,40000]
-        data_dict["scan_idx"] = np.array(idx).astype(np.int64) # [B] object indices from self.scanrefer
+        data_dict["dataset_idx"] = np.array(idx).astype(np.int64) # [B] object indices from self.scanrefer
         data_dict["pcl_color"] = pcl_color
         data_dict["ref_box_label"] = ref_box_label.astype(np.int64) # 0/1 reference labels for each object bbox
         data_dict["ref_center_label"] = ref_center_label.astype(np.float32)
