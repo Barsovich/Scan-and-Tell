@@ -116,7 +116,7 @@ class Dataset:
         return x + g(x) * mag
 
 
-    def getInstanceInfo(self, xyz, instance_label):
+    def getInstanceInfo(self, xyz, instance_label,object_id):
         '''
         :param xyz: (n, 3)
         :param instance_label: (n), int, (0~nInst-1, -100)
@@ -142,7 +142,10 @@ class Dataset:
             ### instance_pointnum
             instance_pointnum.append(inst_idx_i[0].size)
 
-        return instance_num, {"instance_info": instance_info, "instance_pointnum": instance_pointnum}
+            if i_ == object_id:
+                target_instance_pointnum = inst_idx_i[0].size
+
+        return instance_num, {"instance_info": instance_info, "instance_pointnum": instance_pointnum} , target_instance_pointnum
 
 
     def dataAugment(self, xyz, jitter=False, flip=False, rot=False):
@@ -355,7 +358,7 @@ class Dataset:
             instance_label = self.getCroppedInstLabel(instance_label, valid_idxs)
 
             ### get instance information
-            inst_num, inst_infos = self.getInstanceInfo(xyz_middle, instance_label.astype(np.int32))
+            inst_num, inst_infos, target_inst_pointnum = self.getInstanceInfo(xyz_middle, instance_label.astype(np.int32),object_id)
             inst_info = inst_infos["instance_info"]  # (n, 9), (cx, cy, cz, minx, miny, minz, maxx, maxy, maxz)
             inst_pointnum = inst_infos["instance_pointnum"]   # (nInst), list
 
@@ -364,7 +367,7 @@ class Dataset:
             #get target object information
             target_instance_id = object_id + total_inst_num
             target_instance_label = np.where(instance_label == target_instance_id, instance_label, -100) #only keep captioning target
-            target_inst_pointnum = inst_pointnum[object_id]
+            #target_inst_pointnum = inst_pointnum[object_id]
 
             total_inst_num += inst_num
 
@@ -493,7 +496,7 @@ class Dataset:
             instance_label = self.getCroppedInstLabel(instance_label, valid_idxs)
 
             ### get instance information
-            inst_num, inst_infos = self.getInstanceInfo(xyz_middle, instance_label.astype(np.int32))
+            inst_num, inst_infos, _ = self.getInstanceInfo(xyz_middle, instance_label.astype(np.int32),object_id)
             inst_info = inst_infos["instance_info"]  # (n, 9), (cx, cy, cz, minx, miny, minz, maxx, maxy, maxz)
             inst_pointnum = inst_infos["instance_pointnum"]  # (nInst), list
 
