@@ -299,6 +299,9 @@ class Dataset:
         instance_infos = []  # (N, 9)
         instance_pointnum = []  # (total_nInst), int
 
+        target_instance_labels = []
+        target_instance_pointnum = []
+
         lang_feats = []
         lang_lens = []
         lang_ids = []
@@ -326,6 +329,8 @@ class Dataset:
             #get scene data
             data_file = os.path.join(self.data_root,self.dataset,'{}_pointgroup.pth'.format(scene_id))
             xyz_origin, rgb, label, instance_label = torch.load(data_file)
+
+            #instance_bboxes = np.load(os.path.join(self.data_root,self.dataset + '_votenet',scene_id)+'_aligned_bbox.npy')
 
             ### jitter / flip x / rotation
             xyz_middle = self.dataAugment(xyz_origin, True, True, True)
@@ -355,6 +360,12 @@ class Dataset:
             inst_pointnum = inst_infos["instance_pointnum"]   # (nInst), list
 
             instance_label[np.where(instance_label != -100)] += total_inst_num
+
+            #get target object information
+            target_instance_id = object_id + total_inst_num
+            target_instance_label = np.where(instance_label == target_instance_id, instance_label, -100) #only keep captioning target
+            target_inst_pointnum = inst_pointnum[object_id]
+
             total_inst_num += inst_num
 
             ### merge the scene to the batch
@@ -382,6 +393,9 @@ class Dataset:
             instance_infos.append(torch.from_numpy(inst_info))
             instance_pointnum.extend(inst_pointnum)
 
+            target_instance_labels.append(torch.from_numpy(target_instance_label))
+            target_instance_pointnum.append(target_inst_pointnum)
+
             lang_feats.append(torch.from_numpy(lang_feat).unsqueeze(0))
             lang_lens.append(lang_len)
             lang_ids.append(torch.from_numpy(self.lang_ids[scene_id][str(object_id)][ann_id]).unsqueeze(0))
@@ -401,6 +415,9 @@ class Dataset:
         instance_infos = torch.cat(instance_infos, 0).to(torch.float32)       # float (N, 9) (meanxyz, minxyz, maxxyz)
         instance_pointnum = torch.tensor(instance_pointnum, dtype=torch.int)  # int (total_nInst)
 
+        target_instance_labels = torch.cat(target_instance_labels,0).long()
+        target_instance_pointnum = torch.tensor(target_instance_pointnum, dtype=torch.int)
+
         lang_feats = torch.cat(lang_feats,0).to(torch.float32)
         lang_lens = torch.tensor(lang_lens,dtype=torch.long)
         lang_ids = torch.cat(lang_ids,0).to(torch.long)
@@ -413,6 +430,7 @@ class Dataset:
         return {'locs': locs, 'voxel_locs': voxel_locs, 'p2v_map': p2v_map, 'v2p_map': v2p_map,
                 'locs_float': locs_float, 'feats': feats, 'labels': labels, 'instance_labels': instance_labels,
                 'instance_info': instance_infos, 'instance_pointnum': instance_pointnum,
+                'target_instance_labels': target_instance_labels, 'target_instance_pointnum': target_instance_pointnum,
                 'id': id, 'offsets': batch_offsets, 'spatial_shape': spatial_shape, 
                 'lang_feat': lang_feats, 'lang_len': lang_lens, 'lang_ids': lang_ids, 
                 'ann_id': ann_ids, 'object_id': object_ids }
