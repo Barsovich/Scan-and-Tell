@@ -8,12 +8,64 @@ sys.path.append(os.path.join(os.getcwd())) # HACK add the root folder
 from models.backbone_module import Pointnet2Backbone
 from models.voting_module import VotingModule
 from models.proposal_module import ProposalModule
+from models.pointgroup import PointGroup
 from models.graph_module import GraphModule
 from models.captioning_module import PlainCapModule, AttentionCapModule, SceneCaptionModule
 
+from data.scannet.model_util_scannet import ScannetDatasetConfig
+DC = ScannetDatasetConfig()
+
+
+class VoteNetBackbone(nn.Module):
+    def __init__(self,num_class,num_heading_bin, num_size_cluster, mean_size_arr, 
+    input_feature_dim=0, num_proposal=256, num_locals=-1, vote_factor=1, sampling="vote_fps"):
+        
+        super().__init__()
+        self.num_class = num_class
+        self.num_heading_bin = num_heading_bin
+        self.num_size_cluster = num_size_cluster
+        self.mean_size_arr = mean_size_arr
+        assert(mean_size_arr.shape[0] == self.num_size_cluster)
+        self.input_feature_dim = input_feature_dim
+
+        # --------- PROPOSAL GENERATION ---------
+        # Backbone point feature learning
+        self.backbone_net = Pointnet2Backbone(input_feature_dim=self.input_feature_dim)
+
+        # Hough voting
+        self.vgen = VotingModule(self.vote_factor, 256)
+
+        # Vote aggregation and object proposal
+        self.proposal = ProposalModule(num_class, num_heading_bin, num_size_cluster, mean_size_arr, num_proposal, sampling)
+
+    def forward(self,data_dict):
+
+        # --------- HOUGH VOTING ---------
+        data_dict = self.backbone_net(data_dict)
+                
+        # --------- HOUGH VOTING ---------
+        xyz = data_dict["fp2_xyz"]
+        features = data_dict["fp2_features"]
+        data_dict["seed_inds"] = data_dict["fp2_inds"]
+        data_dict["seed_xyz"] = xyz
+        data_dict["seed_features"] = features
+        
+        xyz, features = self.vgen(xyz, features)
+        features_norm = torch.norm(features, p=2, dim=1)
+        features = features.div(features_norm.unsqueeze(1))
+        data_dict["vote_xyz"] = xyz
+        data_dict["vote_features"] = features
+
+        # --------- PROPOSAL GENERATION ---------
+        data_dict = self.proposal(xyz, features, data_dict)
+
+        return data_dict
+
+
 
 class CapNet(nn.Module):
-    def __init__(self, num_class, vocabulary, embeddings, num_heading_bin, num_size_cluster, mean_size_arr, 
+    def __init__(self, vocabulary, embeddings, cfg=None, detection_backbone = 'votenet', num_class = DC.num_class, 
+    num_heading_bin = DC.num_heading_bin, num_size_cluster = DC.num_size_cluster, mean_size_arr = DC.mean_size_arr, 
     input_feature_dim=0, num_proposal=256, num_locals=-1, vote_factor=1, sampling="vote_fps",
     no_caption=True, use_topdown=False, query_mode="corner", 
     graph_mode="graph_conv", num_graph_steps=0, use_relation=False, graph_aggr="add",
@@ -21,6 +73,8 @@ class CapNet(nn.Module):
     emb_size=300, hidden_size=512):
         super().__init__()
 
+        self.detection_backbone = detection_backbone
+        self.pointgroup_cfg = cfg
         self.num_class = num_class
         self.num_heading_bin = num_heading_bin
         self.num_size_cluster = num_size_cluster
@@ -34,15 +88,19 @@ class CapNet(nn.Module):
         self.num_graph_steps = num_graph_steps
 
         # --------- PROPOSAL GENERATION ---------
-        # Backbone point feature learning
-        self.backbone_net = Pointnet2Backbone(input_feature_dim=self.input_feature_dim)
+        if self.detection_backbone == 'votenet':
+            self.detection = VoteNetBackbone(num_class, num_heading_bin, num_size_cluster, input_feature_dim, 
+                num_proposal, num_locals, vote_factor, sampling)
+            self.prepare_epochs = 0
+        elif self.detection_backbone == 'pointgroup':
+            self.detection = PointGroup(pointgroup_cfg)
+            self.no_caption = pointgroup_cfg.no_caption
+            self.prepare_epochs = pointgroup_cfg.prepare_epochs
+        else:
+            print("Unknown backbone. Exiting...")
+            exit(0)
 
-        # Hough voting
-        self.vgen = VotingModule(self.vote_factor, 256)
-
-        # Vote aggregation and object proposal
-        self.proposal = ProposalModule(num_class, num_heading_bin, num_size_cluster, mean_size_arr, num_proposal, sampling)
-
+        # Relation graph
         if use_relation: assert use_topdown # only enable use_relation in topdown captioning module
 
         if num_graph_steps > 0:
@@ -60,7 +118,7 @@ class CapNet(nn.Module):
                 #self.caption = PlainCapModule(128,emb_size,hidden_size)  
                 self.caption = SceneCaptionModule(vocabulary, embeddings, emb_size, 128, hidden_size, num_proposal)
 
-    def forward(self, data_dict, use_tf=True, is_eval=False):
+    def forward(self, data_dict, epoch=1, use_tf=True, is_eval=False):
         """ Forward pass of the network
 
         Args:
@@ -85,24 +143,7 @@ class CapNet(nn.Module):
         #                                     #
         #######################################
 
-        # --------- HOUGH VOTING ---------
-        data_dict = self.backbone_net(data_dict)
-                
-        # --------- HOUGH VOTING ---------
-        xyz = data_dict["fp2_xyz"]
-        features = data_dict["fp2_features"]
-        data_dict["seed_inds"] = data_dict["fp2_inds"]
-        data_dict["seed_xyz"] = xyz
-        data_dict["seed_features"] = features
-        
-        xyz, features = self.vgen(xyz, features)
-        features_norm = torch.norm(features, p=2, dim=1)
-        features = features.div(features_norm.unsqueeze(1))
-        data_dict["vote_xyz"] = xyz
-        data_dict["vote_features"] = features
-
-        # --------- PROPOSAL GENERATION ---------
-        data_dict = self.proposal(xyz, features, data_dict)
+        data_dict = self.detection(data_dict,epoch)
 
         #######################################
         #                                     #
@@ -110,7 +151,8 @@ class CapNet(nn.Module):
         #                                     #
         #######################################
 
-        if self.num_graph_steps > 0: data_dict = self.graph(data_dict)
+        if self.num_graph_steps > 0 and epoch > self.prepare_epochs: 
+            data_dict = self.graph(data_dict)
 
         #######################################
         #                                     #
@@ -119,7 +161,7 @@ class CapNet(nn.Module):
         #######################################
 
         # --------- CAPTION GENERATION ---------
-        if not self.no_caption:
+        if not self.no_caption and epoch > self.prepare_epochs: 
             data_dict = self.caption(data_dict, use_tf, is_eval)
 
         return data_dict
