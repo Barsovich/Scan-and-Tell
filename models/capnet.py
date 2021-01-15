@@ -27,6 +27,9 @@ class VoteNetBackbone(nn.Module):
         self.mean_size_arr = mean_size_arr
         assert(mean_size_arr.shape[0] == self.num_size_cluster)
         self.input_feature_dim = input_feature_dim
+        self.num_proposal = num_proposal
+        self.vote_factor = vote_factor
+        self.sampling = sampling
 
         # --------- PROPOSAL GENERATION ---------
         # Backbone point feature learning
@@ -89,8 +92,8 @@ class CapNet(nn.Module):
 
         # --------- PROPOSAL GENERATION ---------
         if self.detection_backbone == 'votenet':
-            self.detection = VoteNetBackbone(num_class, num_heading_bin, num_size_cluster, input_feature_dim, 
-                num_proposal, num_locals, vote_factor, sampling)
+            self.detection = VoteNetBackbone(num_class, num_heading_bin, num_size_cluster, mean_size_arr,
+                input_feature_dim, num_proposal, num_locals, vote_factor, sampling)
             self.prepare_epochs = 0
         elif self.detection_backbone == 'pointgroup':
             self.detection = PointGroup(pointgroup_cfg)
