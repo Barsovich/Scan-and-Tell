@@ -143,7 +143,11 @@ class Dataset:
             instance_pointnum.append(inst_idx_i[0].size)
 
             if i_ == object_id:
-                target_instance_pointnum = inst_idx_i[0].size
+                target_instance_pointnum = inst_idx_i[0].size 
+        
+        # use placeholder if no_caption; this data won't be used anyway
+        if cfg.no_caption:
+            target_instance_pointnum = 0
 
         return instance_num, {"instance_info": instance_info, "instance_pointnum": instance_pointnum} , target_instance_pointnum
 

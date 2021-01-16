@@ -135,6 +135,9 @@ class PointGroup(nn.Module):
         self.pretrain_module = cfg.pretrain_module
         self.fix_module = cfg.fix_module
 
+        #to be used in forward
+        self.cfg = cfg
+
         norm_fn = functools.partial(nn.BatchNorm1d, eps=1e-4, momentum=0.1)
 
         if block_residual:
@@ -293,16 +296,16 @@ class PointGroup(nn.Module):
 
         batch_idxs = coords[:,0].int()
 
-        if cfg.use_coords:
+        if self.cfg.use_coords:
             feats = torch.cat((coords_float, feats), 1)
-        voxel_feats = pointgroup_ops.voxelization(feats, v2p_map, cfg.mode)  # (M, C), float, cuda
+        voxel_feats = pointgroup_ops.voxelization(feats, v2p_map, self.cfg.mode)  # (M, C), float, cuda
 
-        input_ = spconv.SparseConvTensor(voxel_feats, voxel_coords.int(), spatial_shape, cfg.batch_size)
+        input_ = spconv.SparseConvTensor(voxel_feats, voxel_coords.int(), spatial_shape, self.cfg.batch_size)
 
         output = self.input_conv(input_)
         output = self.unet(output)
         output = self.output_layer(output)
-        output_feats = output.features[input_map.long()]  ## F
+        output_feats = output.features[p2v_map.long()]  ## F
 
         #### semantic segmentation
         semantic_scores = self.linear(output_feats)   # (N, nClass), float

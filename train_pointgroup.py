@@ -89,7 +89,7 @@ def get_scanrefer(scanrefer_train, scanrefer_val, num_scenes):
 
     return new_scanrefer_train, new_scanrefer_val, all_scene_list
 
-def train_epoch(train_loader, model, model_fn, optimizer, epoch):
+def train_epoch(train_loader, model, optimizer, epoch):
     iter_time = utils.AverageMeter()
     data_time = utils.AverageMeter()
     am_dict = {}
@@ -104,10 +104,14 @@ def train_epoch(train_loader, model, model_fn, optimizer, epoch):
         ##### adjust learning rate
         utils.step_learning_rate(optimizer, cfg.lr, epoch - 1, cfg.step_epoch, cfg.multiplier)
 
+        
         #move to cuda 
         for key in data_dict:
-            data_dict[key] = data_dict[key].cuda()
-
+            if type(data_dict[key]) == torch.Tensor:
+                data_dict[key] = data_dict[key].cuda()
+            else:
+                pass
+        
         ##### prepare input and forward
         data_dict = model(data_dict, epoch, use_tf=True, is_eval=False)
         #loss, _, visual_dict, meter_dict = model_fn(batch, model, epoch)
@@ -155,17 +159,26 @@ def train_epoch(train_loader, model, model_fn, optimizer, epoch):
             writer.add_scalar(k+'_train', am_dict[k].avg, epoch)
 
 
-def eval_epoch(val_loader, model, model_fn, epoch):
+def eval_epoch(val_loader, model, epoch):
     logger.info('>>>>>>>>>>>>>>>> Start Evaluation >>>>>>>>>>>>>>>>')
     am_dict = {}
 
     with torch.no_grad():
         model.eval()
         start_epoch = time.time()
-        for i, batch in enumerate(val_loader):
+        for i, data_dict in enumerate(val_loader):
+
+            #move to cuda 
+            for key in data_dict:
+                if type(data_dict[key]) == torch.Tensor:
+                    data_dict[key] = data_dict[key].cuda()
+                else:
+                    pass
 
             ##### prepare input and forward
-            loss, preds, visual_dict, meter_dict = model_fn(batch, model, epoch)
+            data_dict = model(data_dict, epoch, use_tf=False, is_eval=True)
+
+            loss, loss_dict, visual_dict, meter_dict = get_pointgroup_cap_loss(data_dict,cfg,epoch)
 
             ##### meter_dict
             for k, v in meter_dict.items():
@@ -197,30 +210,15 @@ if __name__ == '__main__':
     logger.info('=> creating model ...')
 
     if model_name == 'pointgroup':
-        from models.pointgroup import PointGroup as Network
-        from models.pointgroup import model_fn_decorator
+        from models.capnet import CapNet
+        #from models.pointgroup import PointGroup as Network
+        #from models.pointgroup import model_fn_decorator
     else:
         print("Error: no model - " + model_name)
         exit(0)
 
-    model = Network(cfg)
-
-    use_cuda = torch.cuda.is_available()
-    logger.info('cuda available: {}'.format(use_cuda))
-    assert use_cuda
-    model = model.cuda()
-
-    # logger.info(model)
-    logger.info('#classifier parameters: {}'.format(sum([x.nelement() for x in model.parameters()])))
-
-    ##### optimizer
-    if cfg.optim == 'Adam':
-        optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=cfg.lr)
-    elif cfg.optim == 'SGD':
-        optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=cfg.lr, momentum=cfg.momentum, weight_decay=cfg.weight_decay)
-
     ##### model_fn (criterion)
-    model_fn = model_fn_decorator()
+    #model_fn = model_fn_decorator()
 
     ##### dataset
     if cfg.dataset == 'scannet_data':
@@ -237,13 +235,32 @@ if __name__ == '__main__':
         else:
             print("Error: no data loader - " + data_name)
             exit(0)
+    
+    vocabulary = dataset.vocabulary
+    embeddings = dataset.glove
+
+    model = CapNet(vocabulary, embeddings, cfg, 'pointgroup')
+
+    use_cuda = torch.cuda.is_available()
+    logger.info('cuda available: {}'.format(use_cuda))
+    assert use_cuda
+    model = model.cuda()
+
+    # logger.info(model)
+    logger.info('#classifier parameters: {}'.format(sum([x.nelement() for x in model.parameters()])))
+
+    ##### optimizer
+    if cfg.optim == 'Adam':
+        optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=cfg.lr)
+    elif cfg.optim == 'SGD':
+        optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=cfg.lr, momentum=cfg.momentum, weight_decay=cfg.weight_decay)
 
     ##### resume
     start_epoch = utils.checkpoint_restore(model, cfg.exp_path, cfg.config.split('/')[-1][:-5], use_cuda)      # resume from the latest epoch, or specify the epoch to restore
 
     ##### train and val
     for epoch in range(start_epoch, cfg.epochs + 1):
-        train_epoch(dataset.train_data_loader, model, model_fn, optimizer, epoch)
+        train_epoch(dataset.train_data_loader, model, optimizer, epoch)
 
         if utils.is_multiple(epoch, cfg.save_freq) or utils.is_power2(epoch):
-            eval_epoch(dataset.val_data_loader, model, model_fn, epoch)
+            eval_epoch(dataset.val_data_loader, model, epoch)

@@ -249,7 +249,7 @@ def pointgroup_loss(data_dict, cfg, epoch):
 
     '''offset loss'''
     pt_offsets = data_dict['pt_offsets']
-    coords = data_dict['coords_float'] 
+    coords = data_dict['locs_float'] 
     instance_info = data_dict['instance_info']
     instance_labels = data_dict['instance_labels']
     # pt_offsets: (N, 3), float, cuda
@@ -308,20 +308,24 @@ def get_pointgroup_cap_loss(data_dict, cfg, epoch):
     if detection:
         loss_dict = pointgroup_loss_out
     else:
-        loss_dict['semantic_loss'] = (torch.zeros(1)[0].cuda(),0)
-        loss_dict['offset_norm_loss'] = (torch.zeros(1)[0].cuda(),torch.zeros(1)[0].cuda())
-        loss_dict['offset_dir_loss'] = (torch.zeros(1)[0].cuda(),torch.zeros(1)[0].cuda())
-        loss_out['score_loss'] = (torch.zeros(1)[0].cuda(),0)
+        loss_dict['semantic_loss'] = (torch.zeros(1).cuda(),torch.ones(1).cuda())
+        loss_dict['offset_norm_loss'] = (torch.zeros(1).cuda(),torch.ones(1).cuda())
+        loss_dict['offset_dir_loss'] = (torch.zeros(1).cuda(),torch.ones(1).cuda())
+        loss_dict['score_loss'] = (torch.zeros(1).cuda(),torch.ones(1).cuda())
 
     if caption:
         if epoch > cfg.prepare_epochs:
-            loss_dict['cap_loss'], loss_dict['cap_acc'] = compute_cap_loss(data_dict,config=None,weights=None)
+            cap_loss, cap_acc = compute_cap_loss(data_dict,config=None,weights=None)
+            num_caps = data_dict['lang_cap'].shape[0] 
+            ##change later, second position should be??
+            loss_dict['cap_loss'] = (cap_loss, torch.tensor([num_caps]).cuda())
+            loss_dict['cap_acc'] = (cap_acc, torch.tensor([num_caps]).cuda())
         else:
             pass
     else:
-        loss_dict["cap_loss"] = torch.zeros(1)[0].to(device)
-        loss_dict["cap_acc"] = torch.zeros(1)[0].to(device)
-        loss_dict["pred_ious"] =  torch.zeros(1)[0].to(device)
+        loss_dict["cap_loss"] = (torch.zeros(1).cuda(),torch.ones(1).cuda())
+        loss_dict["cap_acc"] = (torch.zeros(1).cuda(),torch.ones(1).cuda())
+        loss_dict["pred_ious"] =  (torch.zeros(1).cuda(),torch.ones(1).cuda())
 
 
     '''total loss'''
@@ -335,11 +339,11 @@ def get_pointgroup_cap_loss(data_dict, cfg, epoch):
     #prepare for summarywriter
     with torch.no_grad():
         visual_dict['total_loss'] = loss
-        for k, v in loss_out.items():
+        for k, v in loss_dict.items():
             visual_dict[k] = v[0]
 
-        meter_dict['loss'] = (loss.item(), data_dict['coords_float'].shape[0])
-        for k, v in loss_out.items():
+        meter_dict['loss'] = (loss.item(), data_dict['locs_float'].shape[0])
+        for k, v in loss_dict.items():
             meter_dict[k] = (float(v[0]), v[1])
 
     return loss, loss_dict, visual_dict, meter_dict

@@ -96,9 +96,9 @@ class CapNet(nn.Module):
                 input_feature_dim, num_proposal, num_locals, vote_factor, sampling)
             self.prepare_epochs = 0
         elif self.detection_backbone == 'pointgroup':
-            self.detection = PointGroup(pointgroup_cfg)
-            self.no_caption = pointgroup_cfg.no_caption
-            self.prepare_epochs = pointgroup_cfg.prepare_epochs
+            self.detection = PointGroup(self.pointgroup_cfg)
+            self.no_caption = self.pointgroup_cfg.no_caption
+            self.prepare_epochs = self.pointgroup_cfg.prepare_epochs
         else:
             print("Unknown backbone. Exiting...")
             exit(0)
