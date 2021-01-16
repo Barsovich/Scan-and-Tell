@@ -13,6 +13,7 @@ from copy import deepcopy
 
 from config.config_pointgroup import cfg
 from utils.log import logger
+from lib.loss_helper import get_pointgroup_cap_loss
 import utils.utils_pointgroup as utils
 
 SCANREFER_TRAIN = json.load(open(os.path.join('data', "ScanRefer_filtered_train.json")))
@@ -96,15 +97,23 @@ def train_epoch(train_loader, model, model_fn, optimizer, epoch):
     model.train()
     start_epoch = time.time()
     end = time.time()
-    for i, batch in enumerate(train_loader):
+    for i, data_dict in enumerate(train_loader):
         data_time.update(time.time() - end)
         torch.cuda.empty_cache()
 
         ##### adjust learning rate
         utils.step_learning_rate(optimizer, cfg.lr, epoch - 1, cfg.step_epoch, cfg.multiplier)
 
+        #move to cuda 
+        for key in data_dict:
+            data_dict[key] = data_dict[key].cuda()
+
         ##### prepare input and forward
-        loss, _, visual_dict, meter_dict = model_fn(batch, model, epoch)
+        data_dict = model(data_dict, epoch, use_tf=True, is_eval=False)
+        #loss, _, visual_dict, meter_dict = model_fn(batch, model, epoch)
+
+        ##### loss calculation
+        loss, loss_dict, visual_dict, meter_dict = get_pointgroup_cap_loss(data_dict,cfg,epoch)
 
         ##### meter_dict
         for k, v in meter_dict.items():

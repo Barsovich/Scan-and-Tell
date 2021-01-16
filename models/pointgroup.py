@@ -127,6 +127,8 @@ class PointGroup(nn.Module):
         self.score_fullscale = cfg.score_fullscale
         self.mode = cfg.score_mode
 
+        self.no_detection = cfg.no_detection
+
         self.prepare_epochs = cfg.prepare_epochs
 
         self.pretrain_path = cfg.pretrain_path
@@ -189,6 +191,9 @@ class PointGroup(nn.Module):
         module_map = {'input_conv': self.input_conv, 'unet': self.unet, 'output_layer': self.output_layer,
                       'linear': self.linear, 'offset': self.offset, 'offset_linear': self.offset_linear,
                       'score_unet': self.score_unet, 'score_outputlayer': self.score_outputlayer, 'score_linear': self.score_linear}
+
+        if self.no_detection:
+            self.fix_module = module_map.keys()
 
         for m in self.fix_module:
             mod = module_map[m]
@@ -261,16 +266,40 @@ class PointGroup(nn.Module):
         return voxelization_feats, inp_map
 
 
-    def forward(self, input, input_map, coords, batch_idxs, batch_offsets, epoch):
+    def forward(self, data_dict, epoch):
         '''
         :param input_map: (N), int, cuda
         :param coords: (N, 3), float, cuda
         :param batch_idxs: (N), int, cuda
         :param batch_offsets: (B + 1), int, cuda
         '''
-        ret = {}
+        #unpack input data
+        coords = data_dict['locs']                          # (N, 1 + 3), long, cuda, dimension 0 for batch_idx
+        voxel_coords = data_dict['voxel_locs']              # (M, 1 + 3), long, cuda
+        p2v_map = data_dict['p2v_map']                      # (N), int, cuda
+        v2p_map = data_dict['v2p_map']                      # (M, 1 + maxActive), int, cuda
 
-        output = self.input_conv(input)
+        coords_float = data_dict['locs_float']              # (N, 3), float32, cuda
+        feats = data_dict['feats']                          # (N, C), float32, cuda
+        labels = data_dict['labels']                        # (N), long, cuda
+        instance_labels = data_dict['instance_labels']      # (N), long, cuda, 0~total_nInst, -100
+
+        instance_info = data_dict['instance_info']          # (N, 9), float32, cuda, (meanxyz, minxyz, maxxyz)
+        instance_pointnum = data_dict['instance_pointnum']  # (total_nInst), int, cuda
+
+        batch_offsets = data_dict['offsets']                # (B + 1), int, cuda
+
+        spatial_shape = data_dict['spatial_shape']
+
+        batch_idxs = coords[:,0].int()
+
+        if cfg.use_coords:
+            feats = torch.cat((coords_float, feats), 1)
+        voxel_feats = pointgroup_ops.voxelization(feats, v2p_map, cfg.mode)  # (M, C), float, cuda
+
+        input_ = spconv.SparseConvTensor(voxel_feats, voxel_coords.int(), spatial_shape, cfg.batch_size)
+
+        output = self.input_conv(input_)
         output = self.unet(output)
         output = self.output_layer(output)
         output_feats = output.features[input_map.long()]  ## F
@@ -279,13 +308,13 @@ class PointGroup(nn.Module):
         semantic_scores = self.linear(output_feats)   # (N, nClass), float
         semantic_preds = semantic_scores.max(1)[1]    # (N), long   ---- S
 
-        ret['semantic_scores'] = semantic_scores
+        data_dict['semantic_scores'] = semantic_scores
 
         #### offset
         pt_offsets_feats = self.offset(output_feats)
         pt_offsets = self.offset_linear(pt_offsets_feats)   # (N, 3), float32 --- O
 
-        ret['pt_offsets'] = pt_offsets
+        data_dict['pt_offsets'] = pt_offsets
 
         if(epoch > self.prepare_epochs):
             #### get prooposal clusters
@@ -329,10 +358,10 @@ class PointGroup(nn.Module):
 
             object_feats = self.object_features_linear(score_feats)
 
-            ret['proposal_scores'] = (scores, proposals_idx, proposals_offset)
-            ret['proposals_feats'] = object_feats
+            data_dict['proposal_scores'] = (scores, proposals_idx, proposals_offset)
+            data_dict['proposal_feature'] = object_feats
 
-        return ret
+        return data_dict
 
 
 def model_fn_decorator(test=False):
@@ -418,6 +447,10 @@ def model_fn_decorator(test=False):
             # proposals_idx: (sumNPoint, 2), int, cpu, dim 0 for cluster_id, dim 1 for corresponding point idxs in N
             # proposals_offset: (nProposal + 1), int, cpu
 
+        ########################## moved upper part into forward
+
+        ###### moved below into loss_helper.py
+
         loss_inp = {}
         loss_inp['semantic_scores'] = (semantic_scores, labels)
         loss_inp['pt_offsets'] = (pt_offsets, coords_float, instance_info, instance_labels)
@@ -425,6 +458,8 @@ def model_fn_decorator(test=False):
             loss_inp['proposal_scores'] = (scores, proposals_idx, proposals_offset, instance_pointnum)
 
         loss, loss_out, infos = loss_fn(loss_inp, epoch)
+
+        #### 
 
         ##### accuracy / visual_dict / meter_dict
         with torch.no_grad():
@@ -435,6 +470,7 @@ def model_fn_decorator(test=False):
                 preds['score'] = scores
                 preds['proposals'] = (proposals_idx, proposals_offset)
 
+           
             visual_dict = {}
             visual_dict['loss'] = loss
             for k, v in loss_out.items():
