@@ -36,8 +36,8 @@ def select_target(data_dict,backbone='votenet'):
             target_ids.append(target_id)
             target_ious.append(ious[target_id])
 
-            target_ids = torch.LongTensor(target_ids).cuda() # batch_size
-            target_ious = torch.FloatTensor(target_ious).cuda() # batch_size
+        target_ids = torch.LongTensor(target_ids).cuda() # batch_size
+        target_ious = torch.FloatTensor(target_ious).cuda() # batch_size
 
     elif backbone == 'pointgroup':
 
@@ -214,9 +214,9 @@ class SceneCaptionModule(nn.Module):
 
         return hidden, hidden
 
-    def forward(self, data_dict, use_tf=True, is_eval=False, max_len=CONF.TRAIN.MAX_DES_LEN):
+    def forward(self, data_dict, backbone='votenet', use_tf=True, is_eval=False, max_len=CONF.TRAIN.MAX_DES_LEN):
         if not is_eval:
-            data_dict = self.forward_sample_batch(data_dict, max_len)
+            data_dict = self.forward_sample_batch(data_dict, backbone, max_len)
         else:
             data_dict = self.forward_scene_batch(data_dict, use_tf, max_len)
 
@@ -296,7 +296,7 @@ class SceneCaptionModule(nn.Module):
         # unpack
         word_embs = data_dict["lang_feat"] # batch_size, max_len, emb_size
         des_lens = data_dict["lang_len"] # batch_size
-        obj_feats = data_dict["bbox_feature"] # batch_size, num_proposals, feat_size
+        obj_feats = data_dict["proposal_feature"] # batch_size, num_proposals, feat_size
         
         num_words = des_lens[0]
         batch_size = des_lens.shape[0]

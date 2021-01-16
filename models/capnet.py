@@ -41,7 +41,7 @@ class VoteNetBackbone(nn.Module):
         # Vote aggregation and object proposal
         self.proposal = ProposalModule(num_class, num_heading_bin, num_size_cluster, mean_size_arr, num_proposal, sampling)
 
-    def forward(self,data_dict):
+    def forward(self,data_dict,epoch=None):
 
         # --------- HOUGH VOTING ---------
         data_dict = self.backbone_net(data_dict)

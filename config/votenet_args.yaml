@@ -7,7 +7,9 @@ ARGS:
   gpu: 0
   batch_size: 8
   verbose: 10
-  val_step: 2000
+
+  epoch: 20
+  val_step: 100
   lr: 0.001
   wd: 0.00001
   num_points: 40000

@@ -40,4 +40,4 @@ if cfg.model_name == 'pointgroup':
     logger = create_logger(log_file)
     logger.info('************************ Start Logging ************************')
 else:
-    pass
+    logger = None

@@ -330,7 +330,7 @@ def get_pointgroup_cap_loss(data_dict, cfg, epoch):
     if(epoch > cfg.prepare_epochs):
         loss += (cfg.loss_weight[3] * loss_dict['score_loss'])
         if caption:
-            loss += 0.5 loss_dict['cap_loss']
+            loss += 0.5 * loss_dict['cap_loss']
 
     #prepare for summarywriter
     with torch.no_grad():
