@@ -136,7 +136,7 @@ class ProposalModule(nn.Module):
         data_dict['sem_cls_scores'] = sem_cls_scores
         # processed box info
         data_dict["bbox_corner"] = self.decode_pred_box(data_dict) # bounding box corner coordinates
-        data_dict["bbox_feature"] = data_dict["aggregated_vote_features"]
+        data_dict["proposal_feature"] = data_dict["aggregated_vote_features"]
         data_dict["bbox_mask"] = objectness_scores.argmax(-1)
         data_dict['sem_cls'] = sem_cls_scores.argmax(-1)
 

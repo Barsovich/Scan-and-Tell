@@ -165,6 +165,6 @@ class CapNet(nn.Module):
 
         # --------- CAPTION GENERATION ---------
         if not self.no_caption and epoch > self.prepare_epochs: 
-            data_dict = self.caption(data_dict, use_tf, is_eval)
+            data_dict = self.caption(data_dict, self.detection_backbone, use_tf, is_eval)
 
         return data_dict

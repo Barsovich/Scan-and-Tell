@@ -9,31 +9,50 @@ sys.path.append(os.path.join(os.getcwd())) # HACK add the root folder
 from data.scannet.model_util_scannet import ScannetDatasetConfig
 from config.config_votenet import CONF
 from utils.box_util import get_3d_box, get_3d_box_batch, box3d_iou, box3d_iou_batch_tensor
+from lib.pointgroup_ops.functions import pointgroup_ops
 
 # constants
 DC = ScannetDatasetConfig()
 
-def select_target(data_dict):
-    # predicted bbox
-    pred_bbox = data_dict["bbox_corner"] # batch_size, num_proposals, 8, 3
-    batch_size, num_proposals, _, _ = pred_bbox.shape
+def select_target(data_dict,backbone='votenet'):
+    
+    if backbone == 'votenet':
 
-    # ground truth bbox
-    gt_bbox = data_dict["ref_box_corner_label"] # batch_size, 8, 3
+        # predicted bbox
+        pred_bbox = data_dict["bbox_corner"] # batch_size, num_proposals, 8, 3
+        batch_size, num_proposals, _, _ = pred_bbox.shape
 
-    target_ids = []
-    target_ious = []
-    for i in range(batch_size):
-        # convert the bbox parameters to bbox corners
-        pred_bbox_batch = pred_bbox[i] # num_proposals, 8, 3
-        gt_bbox_batch = gt_bbox[i].unsqueeze(0).repeat(num_proposals, 1, 1) # num_proposals, 8, 3
-        ious = box3d_iou_batch_tensor(pred_bbox_batch, gt_bbox_batch)
-        target_id = ious.argmax().item() # 0 ~ num_proposals - 1
-        target_ids.append(target_id)
-        target_ious.append(ious[target_id])
+        # ground truth bbox
+        gt_bbox = data_dict["ref_box_corner_label"] # batch_size, 8, 3
 
-    target_ids = torch.LongTensor(target_ids).cuda() # batch_size
-    target_ious = torch.FloatTensor(target_ious).cuda() # batch_size
+        target_ids = []
+        target_ious = []
+        for i in range(batch_size):
+            # convert the bbox parameters to bbox corners
+            pred_bbox_batch = pred_bbox[i] # num_proposals, 8, 3
+            gt_bbox_batch = gt_bbox[i].unsqueeze(0).repeat(num_proposals, 1, 1) # num_proposals, 8, 3
+            ious = box3d_iou_batch_tensor(pred_bbox_batch, gt_bbox_batch)
+            target_id = ious.argmax().item() # 0 ~ num_proposals - 1
+            target_ids.append(target_id)
+            target_ious.append(ious[target_id])
+
+            target_ids = torch.LongTensor(target_ids).cuda() # batch_size
+            target_ious = torch.FloatTensor(target_ious).cuda() # batch_size
+
+    elif backbone == 'pointgroup':
+
+        #predictions
+        scores, proposals_idx, proposals_offset = data_dict['proposal_scores']
+
+        #ground truth info
+        target_instance_labels = data_dict['target_instance_labels']
+        target_instance_pointnum = data_dict['target_instance_pointnum']
+
+        ious = pointgroup_ops.get_iou(proposals_idx[:, 1].cuda(), proposals_offset.cuda(),
+            target_instance_labels.cuda(), target_instance_pointnum.cuda()) # shape: [num_proposals, batch_size]
+
+        target_ious, target_ids = ious.max(0)
+
 
     return target_ids, target_ious
 
@@ -203,7 +222,8 @@ class SceneCaptionModule(nn.Module):
 
         return data_dict
 
-    def forward_sample_batch(self, data_dict, max_len=CONF.TRAIN.MAX_DES_LEN, min_iou=CONF.TRAIN.MIN_IOU_THRESHOLD):
+    def forward_sample_batch(self, data_dict, backbone='votenet',
+        max_len=CONF.TRAIN.MAX_DES_LEN, min_iou=CONF.TRAIN.MIN_IOU_THRESHOLD):
         """
         generate descriptions based on input tokens and object features
         """
@@ -211,20 +231,24 @@ class SceneCaptionModule(nn.Module):
         # unpack
         word_embs = data_dict["lang_feat"] # batch_size, max_len, emb_size
         des_lens = data_dict["lang_len"] # batch_size
-        obj_feats = data_dict["bbox_feature"] # batch_size, num_proposals, feat_size
+        obj_feats = data_dict["proposal_feature"] # batch_size, num_proposals, feat_size for votenet
+                                                  # total_num_proposals, feat_size for pointgroup
         
         num_words = des_lens[0]
         batch_size = des_lens.shape[0]
 
         # transform the features
-        obj_feats = self.map_feat(obj_feats) # batch_size, num_proposals, emb_size
+        obj_feats = self.map_feat(obj_feats) # batch_size, num_proposals, emb_size OR total_num_proposals, feat_size 
 
         # find the target object ids
-        target_ids, target_ious = select_target(data_dict)
+        target_ids, target_ious = select_target(data_dict,backbone)
 
         # select object features
-        target_feats = torch.gather(
-            obj_feats, 1, target_ids.view(batch_size, 1, 1).repeat(1, 1, self.emb_size)).squeeze(1) # batch_size, emb_size
+        if backbone == 'votenet':
+            target_feats = torch.gather(
+                obj_feats, 1, target_ids.view(batch_size, 1, 1).repeat(1, 1, self.emb_size)).squeeze(1) # batch_size, emb_size
+        elif backbone == 'pointgroup':
+            target_feats = obj_feats[target_ids] #batch_size, emb_size
 
         # recurrent from 0 to max_len - 2
         outputs = []
@@ -247,7 +271,7 @@ class SceneCaptionModule(nn.Module):
 
         outputs = torch.cat(outputs, dim=1) # batch_size, num_words - 1/max_len, num_vocabs
 
-        # NOTE when the IoU of best matching predicted boxes and the GT boxes 
+        # NOTE when the IoU of best matching predicted boxes (proposals) and the GT boxes 
         # are smaller than the threshold, the corresponding predicted captions
         # should be filtered out in case the model learns wrong things
         good_bbox_masks = target_ious > min_iou # batch_size
@@ -259,7 +283,7 @@ class SceneCaptionModule(nn.Module):
         # store
         data_dict["lang_cap"] = outputs
         data_dict["pred_ious"] = mean_target_ious
-        data_dict["good_bbox_masks"] = good_bbox_masks
+        data_dict["good_proposal_masks"] = good_bbox_masks
 
         return data_dict
 
