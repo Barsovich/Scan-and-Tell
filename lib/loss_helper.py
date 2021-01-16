@@ -16,6 +16,7 @@ from lib.loss import SoftmaxRankingLoss
 from utils.box_util import get_3d_box, get_3d_box_batch, box3d_iou, box3d_iou_batch
 from config.config_votenet import CONF
 
+
 FAR_THRESHOLD = 0.6
 NEAR_THRESHOLD = 0.3
 GT_VOTE_FACTOR = 3 # number of GT votes per point
@@ -208,14 +209,14 @@ def compute_cap_loss(data_dict, config, weights):
     cap_loss = criterion(pred_caps.reshape(-1, num_vocabs), target_caps.reshape(-1))
 
     # mask out bad boxes
-    good_bbox_masks = data_dict["good_bbox_masks"].unsqueeze(1).repeat(1, num_words-1).to(torch.float32) # (B, num_words - 1)
+    good_bbox_masks = data_dict["good_proposal_masks"].unsqueeze(1).repeat(1, num_words-1).to(torch.float32) # (B, num_words - 1)
     good_bbox_masks = good_bbox_masks.reshape(-1) # (B * num_words - 1)
     cap_loss = torch.sum(cap_loss * good_bbox_masks) / (torch.sum(good_bbox_masks) + 1e-6)
 
-    num_good_bbox = data_dict["good_bbox_masks"].sum()
+    num_good_bbox = data_dict["good_proposal_masks"].sum()
     if num_good_bbox > 0: # only apply loss on the good boxes
-        pred_caps = pred_caps[data_dict["good_bbox_masks"]] # num_good_bbox
-        target_caps = target_caps[data_dict["good_bbox_masks"]] # num_good_bbox
+        pred_caps = pred_caps[data_dict["good_proposal_masks"]] # num_good_bbox
+        target_caps = target_caps[data_dict["good_proposal_masks"]] # num_good_bbox
 
         # caption acc
         pred_caps = pred_caps.reshape(-1, num_vocabs).argmax(-1) # num_good_bbox * (num_words - 1)
@@ -228,6 +229,120 @@ def compute_cap_loss(data_dict, config, weights):
         cap_acc = torch.zeros(1)[0].cuda()
     
     return cap_loss, cap_acc
+
+def pointgroup_loss(data_dict, cfg, epoch):
+
+    semantic_criterion = nn.CrossEntropyLoss(ignore_index=cfg.ignore_label).cuda()
+    score_criterion = nn.BCELoss(reduction='none').cuda()
+
+    loss_out = {}
+    #infos = {}
+
+    '''semantic loss'''
+    semantic_scores = data_dict['semantic_scores']
+    semantic_labels = data_dict['labels']
+    # semantic_scores: (N, nClass), float32, cuda
+    # semantic_labels: (N), long, cuda
+
+    semantic_loss = semantic_criterion(semantic_scores, semantic_labels)
+    loss_out['semantic_loss'] = (semantic_loss, semantic_scores.shape[0])
+
+    '''offset loss'''
+    pt_offsets = data_dict['pt_offsets']
+    coords = data_dict['coords_float'] 
+    instance_info = data_dict['instance_info']
+    instance_labels = data_dict['instance_labels']
+    # pt_offsets: (N, 3), float, cuda
+    # coords: (N, 3), float32
+    # instance_info: (N, 9), float32 tensor (meanxyz, minxyz, maxxyz)
+    # instance_labels: (N), long
+
+    gt_offsets = instance_info[:, 0:3] - coords   # (N, 3)
+    pt_diff = pt_offsets - gt_offsets   # (N, 3)
+    pt_dist = torch.sum(torch.abs(pt_diff), dim=-1)   # (N)
+    valid = (instance_labels != cfg.ignore_label).float()
+    offset_norm_loss = torch.sum(pt_dist * valid) / (torch.sum(valid) + 1e-6)
+
+    gt_offsets_norm = torch.norm(gt_offsets, p=2, dim=1)   # (N), float
+    gt_offsets_ = gt_offsets / (gt_offsets_norm.unsqueeze(-1) + 1e-8)
+    pt_offsets_norm = torch.norm(pt_offsets, p=2, dim=1)
+    pt_offsets_ = pt_offsets / (pt_offsets_norm.unsqueeze(-1) + 1e-8)
+    direction_diff = - (gt_offsets_ * pt_offsets_).sum(-1)   # (N)
+    offset_dir_loss = torch.sum(direction_diff * valid) / (torch.sum(valid) + 1e-6)
+
+    loss_out['offset_norm_loss'] = (offset_norm_loss, valid.sum())
+    loss_out['offset_dir_loss'] = (offset_dir_loss, valid.sum())
+
+    if (epoch > cfg.prepare_epochs):
+        '''score loss'''
+        scores, proposals_idx, proposals_offset = data_dict['proposal_scores']
+        instance_pointnum = data_dict['instance_pointnum']
+        # scores: (nProposal, 1), float32
+        # proposals_idx: (sumNPoint, 2), int, cpu, dim 0 for cluster_id, dim 1 for corresponding point idxs in N
+        # proposals_offset: (nProposal + 1), int, cpu
+        # instance_pointnum: (total_nInst), int
+
+        ious = pointgroup_ops.get_iou(proposals_idx[:, 1].cuda(), proposals_offset.cuda(), instance_labels, instance_pointnum) # (nProposal, nInstance), float
+        gt_ious, gt_instance_idxs = ious.max(1)  # (nProposal) float, long
+        gt_scores = get_segmented_scores(gt_ious, cfg.fg_thresh, cfg.bg_thresh)
+
+        score_loss = score_criterion(torch.sigmoid(scores.view(-1)), gt_scores)
+        score_loss = score_loss.mean()
+
+        loss_out['score_loss'] = (score_loss, gt_ious.shape[0])
+
+    return loss_out
+
+
+def get_pointgroup_cap_loss(data_dict, cfg, epoch):
+
+    detection = not cfg.no_detection
+    caption = not cfg.no_caption
+
+    loss_dict = {}
+    meter_dict = {}
+    visual_dict = {}
+
+    pointgroup_loss_out = pointgroup_loss(data_dict,cfg,epoch)
+
+    if detection:
+        loss_dict = pointgroup_loss_out
+    else:
+        loss_dict['semantic_loss'] = (torch.zeros(1)[0].cuda(),0)
+        loss_dict['offset_norm_loss'] = (torch.zeros(1)[0].cuda(),torch.zeros(1)[0].cuda())
+        loss_dict['offset_dir_loss'] = (torch.zeros(1)[0].cuda(),torch.zeros(1)[0].cuda())
+        loss_out['score_loss'] = (torch.zeros(1)[0].cuda(),0)
+
+    if caption:
+        if epoch > cfg.prepare_epochs:
+            loss_dict['cap_loss'], loss_dict['cap_acc'] = compute_cap_loss(data_dict,config=None,weights=None)
+        else:
+            pass
+    else:
+        loss_dict["cap_loss"] = torch.zeros(1)[0].to(device)
+        loss_dict["cap_acc"] = torch.zeros(1)[0].to(device)
+        loss_dict["pred_ious"] =  torch.zeros(1)[0].to(device)
+
+
+    '''total loss'''
+    loss = cfg.loss_weight[0] * loss_dict['semantic_loss'][0] + cfg.loss_weight[1] * loss_dict['offset_norm_loss'][0] \
+    + cfg.loss_weight[2] * loss_dict['offset_dir_loss'][0]
+    if(epoch > cfg.prepare_epochs):
+        loss += (cfg.loss_weight[3] * loss_dict['score_loss'])
+        if caption:
+            loss += 0.5 loss_dict['cap_loss']
+
+    #prepare for summarywriter
+    with torch.no_grad():
+        visual_dict['total_loss'] = loss
+        for k, v in loss_out.items():
+            visual_dict[k] = v[0]
+
+        meter_dict['loss'] = (loss.item(), data_dict['coords_float'].shape[0])
+        for k, v in loss_out.items():
+            meter_dict[k] = (float(v[0]), v[1])
+
+    return loss, loss_dict, visual_dict, meter_dict
 
 def get_scene_cap_loss(data_dict, device, config, weights, 
 detection=True, caption=True, orientation=False, distance=False, num_bins=CONF.TRAIN.NUM_BINS):
