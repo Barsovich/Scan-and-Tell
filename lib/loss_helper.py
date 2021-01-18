@@ -15,6 +15,7 @@ from lib.ap_helper import parse_predictions
 from lib.loss import SoftmaxRankingLoss
 from utils.box_util import get_3d_box, get_3d_box_batch, box3d_iou, box3d_iou_batch
 from config.config_votenet import CONF
+from lib.pointgroup_ops.functions import pointgroup_ops
 
 
 FAR_THRESHOLD = 0.6
@@ -230,6 +231,24 @@ def compute_cap_loss(data_dict, config, weights):
     
     return cap_loss, cap_acc
 
+
+def get_segmented_scores(scores, fg_thresh=1.0, bg_thresh=0.0):
+        '''
+        **PointGroup**
+        :param scores: (N), float, 0~1
+        :return: segmented_scores: (N), float 0~1, >fg_thresh: 1, <bg_thresh: 0, mid: linear
+        '''
+        fg_mask = scores > fg_thresh
+        bg_mask = scores < bg_thresh
+        interval_mask = (fg_mask == 0) & (bg_mask == 0)
+
+        segmented_scores = (fg_mask > 0).float()
+        k = 1 / (fg_thresh - bg_thresh)
+        b = bg_thresh / (bg_thresh - fg_thresh)
+        segmented_scores[interval_mask] = scores[interval_mask] * k + b
+
+        return segmented_scores 
+
 def pointgroup_loss(data_dict, cfg, epoch):
 
     semantic_criterion = nn.CrossEntropyLoss(ignore_index=cfg.ignore_label).cuda()
@@ -308,33 +327,34 @@ def get_pointgroup_cap_loss(data_dict, cfg, epoch):
     if detection:
         loss_dict = pointgroup_loss_out
     else:
-        loss_dict['semantic_loss'] = (torch.zeros(1).cuda(),torch.ones(1).cuda())
-        loss_dict['offset_norm_loss'] = (torch.zeros(1).cuda(),torch.ones(1).cuda())
-        loss_dict['offset_dir_loss'] = (torch.zeros(1).cuda(),torch.ones(1).cuda())
-        loss_dict['score_loss'] = (torch.zeros(1).cuda(),torch.ones(1).cuda())
+        loss_dict['semantic_loss'] = (torch.zeros(1).cuda(),1)
+        loss_dict['offset_norm_loss'] = (torch.zeros(1).cuda(),1)
+        loss_dict['offset_dir_loss'] = (torch.zeros(1).cuda(),1)
+        loss_dict['score_loss'] = (torch.zeros(1).cuda(),1)
 
     if caption:
         if epoch > cfg.prepare_epochs:
             cap_loss, cap_acc = compute_cap_loss(data_dict,config=None,weights=None)
-            num_caps = data_dict['lang_cap'].shape[0] 
-            ##change later, second position should be??
-            loss_dict['cap_loss'] = (cap_loss, torch.tensor([num_caps]).cuda())
-            loss_dict['cap_acc'] = (cap_acc, torch.tensor([num_caps]).cuda())
+            #cap loss is calculated over good object detections, so it should be averaged over them
+            num_good_proposals = data_dict["good_proposal_masks"].sum()
+            num_good_proposals = num_good_proposals if num_good_proposals != 0 else 1
+            loss_dict['cap_loss'] = (cap_loss, num_good_proposals)
+            loss_dict['cap_acc'] = (cap_acc, num_good_proposals)
         else:
             pass
     else:
-        loss_dict["cap_loss"] = (torch.zeros(1).cuda(),torch.ones(1).cuda())
-        loss_dict["cap_acc"] = (torch.zeros(1).cuda(),torch.ones(1).cuda())
-        loss_dict["pred_ious"] =  (torch.zeros(1).cuda(),torch.ones(1).cuda())
+        loss_dict["cap_loss"] = (torch.zeros(1).cuda(),1)
+        loss_dict["cap_acc"] = (torch.zeros(1).cuda(),1)
+        loss_dict["pred_ious"] =  (torch.zeros(1).cuda(),1)
 
 
     '''total loss'''
-    loss = cfg.loss_weight[0] * loss_dict['semantic_loss'][0] + cfg.loss_weight[1] * loss_dict['offset_norm_loss'][0] \
-    + cfg.loss_weight[2] * loss_dict['offset_dir_loss'][0]
+    loss = 1 * loss_dict['semantic_loss'][0] + 1 * loss_dict['offset_norm_loss'][0] \
+    + 1 * loss_dict['offset_dir_loss'][0]
     if(epoch > cfg.prepare_epochs):
-        loss += (cfg.loss_weight[3] * loss_dict['score_loss'])
+        loss += (1 * loss_dict['score_loss'][0])
         if caption:
-            loss += 0.5 * loss_dict['cap_loss']
+            loss += 0.5 * loss_dict['cap_loss'][0]
 
     #prepare for summarywriter
     with torch.no_grad():

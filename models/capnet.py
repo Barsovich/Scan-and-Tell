@@ -72,7 +72,7 @@ class CapNet(nn.Module):
     input_feature_dim=0, num_proposal=256, num_locals=-1, vote_factor=1, sampling="vote_fps",
     no_caption=True, use_topdown=False, query_mode="corner", 
     graph_mode="graph_conv", num_graph_steps=0, use_relation=False, graph_aggr="add",
-    use_orientation=False, num_bins=6, use_distance=False, use_new=False, 
+    use_orientation=False, num_bins=6, use_distance=False, use_new=False, prepare_epochs=0,
     emb_size=300, hidden_size=512):
         super().__init__()
 
@@ -89,16 +89,14 @@ class CapNet(nn.Module):
         self.sampling = sampling
         self.no_caption = no_caption
         self.num_graph_steps = num_graph_steps
+        self.prepare_epochs = prepare_epochs
 
         # --------- PROPOSAL GENERATION ---------
         if self.detection_backbone == 'votenet':
             self.detection = VoteNetBackbone(num_class, num_heading_bin, num_size_cluster, mean_size_arr,
                 input_feature_dim, num_proposal, num_locals, vote_factor, sampling)
-            self.prepare_epochs = 0
         elif self.detection_backbone == 'pointgroup':
             self.detection = PointGroup(self.pointgroup_cfg)
-            self.no_caption = self.pointgroup_cfg.no_caption
-            self.prepare_epochs = self.pointgroup_cfg.prepare_epochs
         else:
             print("Unknown backbone. Exiting...")
             exit(0)

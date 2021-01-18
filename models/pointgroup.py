@@ -324,8 +324,8 @@ class PointGroup(nn.Module):
             object_idxs = torch.nonzero(semantic_preds > 1).view(-1)
 
             batch_idxs_ = batch_idxs[object_idxs]
-            batch_offsets_ = utils.get_batch_offsets(batch_idxs_, input.batch_size)
-            coords_ = coords[object_idxs]
+            batch_offsets_ = utils.get_batch_offsets(batch_idxs_, input_.batch_size)
+            coords_ = coords_float[object_idxs]
             pt_offsets_ = pt_offsets[object_idxs]
 
             semantic_preds_cpu = semantic_preds[object_idxs].int().cpu()
@@ -350,7 +350,7 @@ class PointGroup(nn.Module):
             proposals_offset = torch.cat((proposals_offset, proposals_offset_shift[1:]))
 
             #### proposals voxelization again
-            input_feats, inp_map = self.clusters_voxelization(proposals_idx, proposals_offset, output_feats, coords, self.score_fullscale, self.score_scale, self.mode)
+            input_feats, inp_map = self.clusters_voxelization(proposals_idx, proposals_offset, output_feats, coords_float, self.score_fullscale, self.score_scale, self.mode)
 
             #### score
             score = self.score_unet(input_feats)

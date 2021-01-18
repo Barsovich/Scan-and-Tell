@@ -239,7 +239,7 @@ if __name__ == '__main__':
     vocabulary = dataset.vocabulary
     embeddings = dataset.glove
 
-    model = CapNet(vocabulary, embeddings, cfg, 'pointgroup')
+    model = CapNet(vocabulary, embeddings, cfg, 'pointgroup',no_caption=cfg.no_caption,prepare_epochs=cfg.prepare_epochs)
 
     use_cuda = torch.cuda.is_available()
     logger.info('cuda available: {}'.format(use_cuda))
