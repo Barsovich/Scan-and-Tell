@@ -16,6 +16,7 @@ sys.path.append('../')
 from config.config_pointgroup import cfg
 from utils.log import logger
 from lib.pointgroup_ops.functions import pointgroup_ops
+from utils.pc_utils import random_sampling
 
 GLOVE_PICKLE = os.path.join('data', "glove.p")
 SCANREFER_VOCAB = os.path.join('data', "ScanRefer_vocabulary.json")
@@ -354,12 +355,13 @@ class Dataset:
 
             ### crop
             # xyz, valid_idxs = self.crop(xyz)
+            xyz, valid_idxs = random_sampling(xyz, self.max_npoint, return_choices=True)
 
-            # xyz_middle = xyz_middle[valid_idxs]
+            xyz_middle = xyz_middle[valid_idxs]
             # xyz = xyz[valid_idxs]
-            # rgb = rgb[valid_idxs]
-            # label = label[valid_idxs]
-            # instance_label = self.getCroppedInstLabel(instance_label, valid_idxs)
+            rgb = rgb[valid_idxs]
+            label = label[valid_idxs]
+            instance_label = self.getCroppedInstLabel(instance_label, valid_idxs)
 
             ### get instance information
             inst_num, inst_infos, target_inst_pointnum = self.getInstanceInfo(xyz_middle, instance_label.astype(np.int32),object_id)
@@ -491,13 +493,13 @@ class Dataset:
             xyz -= xyz.min(0)
 
             ### crop
-            # xyz, valid_idxs = self.crop(xyz)
+            xyz, valid_idxs = random_sampling(xyz, self.max_npoint, return_choices=True)
 
-            # xyz_middle = xyz_middle[valid_idxs]
+            xyz_middle = xyz_middle[valid_idxs]
             # xyz = xyz[valid_idxs]
-            # rgb = rgb[valid_idxs]
-            # label = label[valid_idxs]
-            # instance_label = self.getCroppedInstLabel(instance_label, valid_idxs)
+            rgb = rgb[valid_idxs]
+            label = label[valid_idxs]
+            instance_label = self.getCroppedInstLabel(instance_label, valid_idxs)
 
             ### get instance information
             inst_num, inst_infos, _ = self.getInstanceInfo(xyz_middle, instance_label.astype(np.int32),object_id)
