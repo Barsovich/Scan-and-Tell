@@ -284,11 +284,11 @@ class PointGroup(nn.Module):
 
         coords_float = data_dict['locs_float']              # (N, 3), float32, cuda
         feats = data_dict['feats']                          # (N, C), float32, cuda
-        labels = data_dict['labels']                        # (N), long, cuda
-        instance_labels = data_dict['instance_labels']      # (N), long, cuda, 0~total_nInst, -100
+        #labels = data_dict['labels']                        # (N), long, cuda
+        #instance_labels = data_dict['instance_labels']      # (N), long, cuda, 0~total_nInst, -100
 
-        instance_info = data_dict['instance_info']          # (N, 9), float32, cuda, (meanxyz, minxyz, maxxyz)
-        instance_pointnum = data_dict['instance_pointnum']  # (total_nInst), int, cuda
+        #instance_info = data_dict['instance_info']          # (N, 9), float32, cuda, (meanxyz, minxyz, maxxyz)
+        #instance_pointnum = data_dict['instance_pointnum']  # (total_nInst), int, cuda
 
         batch_offsets = data_dict['offsets']                # (B + 1), int, cuda
 
