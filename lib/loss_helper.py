@@ -313,10 +313,10 @@ def pointgroup_loss(data_dict, cfg, epoch):
     return loss_out
 
 
-def get_pointgroup_cap_loss(data_dict, cfg, epoch):
+def get_pointgroup_cap_loss(data_dict, cfg, epoch,detection=True, caption=False):
 
-    detection = not cfg.no_detection
-    caption = not cfg.no_caption
+    # detection = not cfg.no_detection
+    # caption = not cfg.no_caption
 
     loss_dict = {}
     meter_dict = {}
@@ -349,12 +349,12 @@ def get_pointgroup_cap_loss(data_dict, cfg, epoch):
 
 
     '''total loss'''
-    loss = 1 * loss_dict['semantic_loss'][0] + 1 * loss_dict['offset_norm_loss'][0] \
-    + 1 * loss_dict['offset_dir_loss'][0]
+    loss = 1.25 * loss_dict['semantic_loss'][0] + 1.25 * loss_dict['offset_norm_loss'][0] \
+    + 1.25 * loss_dict['offset_dir_loss'][0]
     if(epoch > cfg.prepare_epochs):
-        loss += (1 * loss_dict['score_loss'][0])
+        loss += (1.25 * loss_dict['score_loss'][0])
         if caption:
-            loss += 0.5 * loss_dict['cap_loss'][0]
+            loss += loss_dict['cap_loss'][0]
 
     #prepare for summarywriter
     with torch.no_grad():
