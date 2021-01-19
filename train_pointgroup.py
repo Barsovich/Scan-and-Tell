@@ -148,7 +148,7 @@ def train_epoch(train_loader, model, optimizer, epoch):
 
         if i == iteration_count // 2:
             utils.checkpoint_save_mid_epoch(model, cfg.exp_path, cfg.config.split('/')[-1][:-5], epoch, use_cuda)
-            
+
         sys.stdout.write(
             "epoch: {}/{} iter: {}/{} loss: {:.4f}({:.4f}) data_time: {:.2f}({:.2f}) iter_time: {:.2f}({:.2f}) remain_time: {remain_time}\n".format
             (epoch, cfg.epochs, i + 1, len(train_loader), am_dict['loss'].val, am_dict['loss'].avg,
@@ -269,4 +269,5 @@ if __name__ == '__main__':
         train_epoch(dataset.train_data_loader, model, optimizer, epoch)
 
         if utils.is_multiple(epoch, cfg.save_freq) or utils.is_power2(epoch):
-            eval_epoch(dataset.val_data_loader, model, epoch)
+            # eval_epoch(dataset.val_data_loader, model, epoch)
+            pass
