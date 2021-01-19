@@ -111,7 +111,13 @@ def export_one_scan(model, scan_name, output_filename_prefix):
                     pointids += segid_to_pointid[segid]
                 instance_labels[pointids] = i
                 assert(len(np.unique(sem_labels[pointids])) == 1)
-
+            N = len(sem_labels)
+            if N > MAX_NUM_POINT:
+                choices = np.random.choice(N, MAX_NUM_POINT, replace=False)
+                coords = coords[choices, :]
+                colors = colors[choices, :]
+                sem_labels = sem_labels[choices]
+                instance_labels = instance_labels[choices]
             torch.save((coords, colors, sem_labels, instance_labels), output_filename_prefix + '_pointgroup.pth')
 
 
@@ -128,6 +134,7 @@ def delete_raw(scan_name,handler_func):
 
 
 def batch_export():
+    np.random.seed(0)
     if not os.path.exists(OUTPUT_FOLDER):
         print('Creating new data folder: {}'.format(OUTPUT_FOLDER))                
         os.mkdir(OUTPUT_FOLDER)        

@@ -127,7 +127,6 @@ def get_coords_color(opt, label_to_display=-1):
 
     if opt.room_split != 'test':
         sem_valid = (label != -100)
-        import pdb; pdb.set_trace()
         # sem_valid = (label == inst_label_pred)
         xyz = xyz[sem_valid]
         rgb = rgb[sem_valid]
