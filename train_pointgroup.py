@@ -97,6 +97,9 @@ def train_epoch(train_loader, model, optimizer, epoch):
     model.train()
     start_epoch = time.time()
     end = time.time()
+
+    iteration_count = len(train_loader)
+
     for i, data_dict in enumerate(train_loader):
         data_time.update(time.time() - end)
         torch.cuda.empty_cache()
@@ -143,6 +146,9 @@ def train_epoch(train_loader, model, optimizer, epoch):
         t_h, t_m = divmod(t_m, 60)
         remain_time = '{:02d}:{:02d}:{:02d}'.format(int(t_h), int(t_m), int(t_s))
 
+        if i == iteration_count // 2:
+            utils.checkpoint_save_mid_epoch(model, cfg.exp_path, cfg.config.split('/')[-1][:-5], epoch, use_cuda)
+            
         sys.stdout.write(
             "epoch: {}/{} iter: {}/{} loss: {:.4f}({:.4f}) data_time: {:.2f}({:.2f}) iter_time: {:.2f}({:.2f}) remain_time: {remain_time}\n".format
             (epoch, cfg.epochs, i + 1, len(train_loader), am_dict['loss'].val, am_dict['loss'].avg,

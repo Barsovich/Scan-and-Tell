@@ -81,6 +81,13 @@ def is_power2(num):
 def is_multiple(num, multiple):
     return num != 0 and num % multiple == 0
 
+def checkpoint_save_mid_epoch(model, exp_path, exp_name, epoch, use_cuda=True):
+    f = os.path.join(exp_path, exp_name + '-%09d'%epoch + 'mid.pth')
+    logger.info('Saving ' + f)
+    model.cpu()
+    torch.save(model.state_dict(), f)
+    if use_cuda:
+        model.cuda()
 
 def checkpoint_save(model, exp_path, exp_name, epoch, save_freq=16, use_cuda=True):
     f = os.path.join(exp_path, exp_name + '-%09d'%epoch + '.pth')
