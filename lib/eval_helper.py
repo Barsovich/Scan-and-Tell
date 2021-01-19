@@ -8,6 +8,7 @@ import json
 import torch
 import pickle
 import argparse
+import time
 
 import numpy as np
 
@@ -417,17 +418,36 @@ def eval_cap(model, device, dataset, dataloader, phase, folder,
     else:
         return bleu, cider, rouge, meteor, cls_acc
 
-def feed_pointgroup_cap(data_dict,dataset,dataloader,):
+def feed_pointgroup_cap(model,epoch,dataset,dataloader,):
 
-    return None
+    with torch.no_grad():
+        #model.eval()
+        #start_epoch = time.time()
+        for data_dict in tqdm(dataloader):
 
-def eval_cap_pointgroup(data_dict,epoch,dataset,dataloader,no_detection=False,no_caption=False):
+            #move to cuda 
+            for key in data_dict:
+                if type(data_dict[key]) == torch.Tensor:
+                    data_dict[key] = data_dict[key].cuda()
+                else:
+                    pass
+
+            ##### prepare input and forward
+            data_dict = model(data_dict, epoch, use_tf=False, is_eval=True) 
+
+            loss, loss_dict, visual_dict, meter_dict = get_pointgroup_cap_loss(data_dict,cfg,epoch,
+            no_detection=no_detection,no_caption=False)
+
+
+    return meter_dict
+
+def eval_cap_pointgroup(model,epoch,dataset,dataloader,no_detection=False,no_caption=False):
     am_dict = {}
 
     if no_caption:
         with torch.no_grad():
-            model.eval()
-            start_epoch = time.time()
+            #model.eval()
+            #start_epoch = time.time()
             for data_dict in tqdm(dataloader):
 
                 #move to cuda 
@@ -450,36 +470,20 @@ def eval_cap_pointgroup(data_dict,epoch,dataset,dataloader,no_detection=False,no
                         am_dict[k] = utils.AverageMeter()
                     am_dict[k].update(v[0], v[1])
     else:
+
+        meter_dict = feed_pointgroup_cap(model,epoch,dataset,dataloader)
         
-        with torch.no_grad():
-            model.eval()
-            start_epoch = time.time()
-            for data_dict in tqdm(dataloader):
-
-                #move to cuda 
-                for key in data_dict:
-                    if type(data_dict[key]) == torch.Tensor:
-                        data_dict[key] = data_dict[key].cuda()
-                    else:
-                        pass
-
-                ##### prepare input and forward
-                data_dict = model(data_dict, epoch, use_tf=False, is_eval=True) 
-
-                loss, loss_dict, visual_dict, meter_dict = get_pointgroup_cap_loss(data_dict,cfg,epoch,
-                no_detection=no_detection,no_caption=False)
-
-                ##TODO: equivelent steps of feed_scene_cap()
-                ## and then eval_cap to write captions in corpus and find metrics
+        ##TODO: equivelent steps of feed_scene_cap()
+        ## and then eval_cap to write captions in corpus and find metrics
 
 
-                #decide if captioning metrics should be stored, printed & logged like this or differently
+        #decide if captioning metrics should be stored, printed & logged like this or differently
 
-                ##### meter_dict
-                for k, v in meter_dict.items():
-                    if k not in am_dict.keys():
-                        am_dict[k] = utils.AverageMeter()
-                    am_dict[k].update(v[0], v[1])
+        ##### meter_dict
+        for k, v in meter_dict.items():
+            if k not in am_dict.keys():
+                am_dict[k] = utils.AverageMeter()
+            am_dict[k].update(v[0], v[1])
 
 
     return am_dict
