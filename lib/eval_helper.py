@@ -29,7 +29,7 @@ from config.config_votenet import CONF
 from lib.ap_helper import parse_predictions
 from lib.loss import SoftmaxRankingLoss
 from utils.box_util import box3d_iou, box3d_iou_batch_tensor
-from lib.loss_helper import get_scene_cap_loss
+from lib.loss_helper import get_scene_cap_loss, get_pointgroup_cap_loss
 
 # constants
 DC = ScannetDatasetConfig()
@@ -417,7 +417,72 @@ def eval_cap(model, device, dataset, dataloader, phase, folder,
     else:
         return bleu, cider, rouge, meteor, cls_acc
 
+def feed_pointgroup_cap(data_dict,dataset,dataloader,):
 
+    return None
+
+def eval_cap_pointgroup(data_dict,epoch,dataset,dataloader,no_detection=False,no_caption=False):
+    am_dict = {}
+
+    if no_caption:
+        with torch.no_grad():
+            model.eval()
+            start_epoch = time.time()
+            for data_dict in tqdm(dataloader):
+
+                #move to cuda 
+                for key in data_dict:
+                    if type(data_dict[key]) == torch.Tensor:
+                        data_dict[key] = data_dict[key].cuda()
+                    else:
+                        pass
+
+                ##### prepare input and forward
+                #is_eval=False not important, captioning_module won't be used
+                data_dict = model(data_dict, epoch, use_tf=False, is_eval=False) 
+
+                loss, loss_dict, visual_dict, meter_dict = get_pointgroup_cap_loss(data_dict,cfg,epoch,
+                no_detection=False,no_caption=True)
+
+                ##### meter_dict
+                for k, v in meter_dict.items():
+                    if k not in am_dict.keys():
+                        am_dict[k] = utils.AverageMeter()
+                    am_dict[k].update(v[0], v[1])
+    else:
+        
+        with torch.no_grad():
+            model.eval()
+            start_epoch = time.time()
+            for data_dict in tqdm(dataloader):
+
+                #move to cuda 
+                for key in data_dict:
+                    if type(data_dict[key]) == torch.Tensor:
+                        data_dict[key] = data_dict[key].cuda()
+                    else:
+                        pass
+
+                ##### prepare input and forward
+                data_dict = model(data_dict, epoch, use_tf=False, is_eval=True) 
+
+                loss, loss_dict, visual_dict, meter_dict = get_pointgroup_cap_loss(data_dict,cfg,epoch,
+                no_detection=no_detection,no_caption=False)
+
+                ##TODO: equivelent steps of feed_scene_cap()
+                ## and then eval_cap to write captions in corpus and find metrics
+
+
+                #decide if captioning metrics should be stored, printed & logged like this or differently
+
+                ##### meter_dict
+                for k, v in meter_dict.items():
+                    if k not in am_dict.keys():
+                        am_dict[k] = utils.AverageMeter()
+                    am_dict[k].update(v[0], v[1])
+
+
+    return am_dict
 
 def get_eval(data_dict, config, caption, use_lang_classifier=False, use_oracle=False, use_cat_rand=False, use_best=False, post_processing=None):
     """ Loss functions
