@@ -15,6 +15,10 @@ from utils.log import logger
 import utils.utils_pointgroup as utils
 import utils.pointgroup.eval as eval
 import lib.ap_helper as ap_helper
+from copy import deepcopy
+import json
+SCANREFER_TRAIN = json.load(open(os.path.join('data', "ScanRefer_filtered_train.json")))
+SCANREFER_VAL = json.load(open(os.path.join('data', "ScanRefer_filtered_val.json")))
 
 def remap_semantic_ids(sematic_ids):
     semantic_label_idx = [3,4,5,6,7,8,9,10,11,12,14,16,24,28,33,34,36,39]
@@ -46,19 +50,72 @@ def init():
     torch.manual_seed(cfg.test_seed)
     torch.cuda.manual_seed_all(cfg.test_seed)
 
+def get_scannet_scene_list(split):
+    scene_list = sorted([line.rstrip() for line in open(os.path.join(cfg.data_root,'meta_data', "scannetv2_{}.txt".format(split)))])
+
+    return scene_list
+
+def get_scanrefer(scanrefer_train, scanrefer_val, num_scenes):
+    if cfg.no_caption:
+        train_scene_list = get_scannet_scene_list("train")
+        new_scanrefer_train = []
+        for scene_id in train_scene_list:
+            data = deepcopy(SCANREFER_TRAIN[0])
+            data["scene_id"] = scene_id
+            new_scanrefer_train.append(data)
+
+        val_scene_list = get_scannet_scene_list("val")
+        new_scanrefer_val = []
+        for scene_id in val_scene_list:
+            data = deepcopy(SCANREFER_VAL[0])
+            data["scene_id"] = scene_id
+            new_scanrefer_val.append(data)
+    else:
+        # get initial scene list
+        train_scene_list = sorted(list(set([data["scene_id"] for data in scanrefer_train])))
+        val_scene_list = sorted(list(set([data["scene_id"] for data in scanrefer_val])))
+        if num_scenes == -1:
+            num_scenes = len(train_scene_list)
+        else:
+            assert len(train_scene_list) >= num_scenes
+
+        # slice train_scene_list
+        train_scene_list = train_scene_list[:num_scenes]
+
+        # filter data in chosen scenes
+        new_scanrefer_train = []
+        for data in scanrefer_train:
+            if data["scene_id"] in train_scene_list:
+                new_scanrefer_train.append(data)
+
+        new_scanrefer_val = scanrefer_val
+
+    # all scanrefer scene
+    all_scene_list = train_scene_list + val_scene_list
+
+    print("train on {} samples and val on {} samples".format(len(new_scanrefer_train), len(new_scanrefer_val)))
+
+    return new_scanrefer_train, new_scanrefer_val, all_scene_list
+
 
 def test(model, model_fn, data_name, epoch):
     logger.info('>>>>>>>>>>>>>>>> Start Evaluation >>>>>>>>>>>>>>>>')
 
+    scanrefer_train, scanrefer_val, all_scene_list = get_scanrefer(SCANREFER_TRAIN, SCANREFER_VAL, -1)
+    scanrefer = {
+        "train": scanrefer_train,
+        "val": scanrefer_val
+    }
+
     if cfg.dataset == 'scannet_data':
         if data_name == 'scannet':
             from data.dataset_pointgroup import Dataset
-            dataset = Dataset(test=True)
-            dataset.testLoader()
+            dataset = Dataset(scanrefer=scanrefer)
+            dataset.valLoader()
         else:
             print("Error: no data loader - " + data_name)
             exit(0)
-    dataloader = dataset.test_data_loader
+    dataloader = dataset.val_data_loader
 
     with torch.no_grad():
         model = model.eval()
@@ -71,8 +128,7 @@ def test(model, model_fn, data_name, epoch):
 
         for i, batch in enumerate(dataloader):
             N = batch['feats'].shape[0]
-            test_scene_name = dataset.test_file_names[int(batch['id'][0])].split('/')[-1][:12]
-
+            test_scene_name = dataset.val_file_names[int(batch['id'][0])].split('/')[-1][:12]
             start1 = time.time()
             preds = model_fn(batch, model, epoch)
             end1 = time.time() - start1
@@ -126,7 +182,6 @@ def test(model, model_fn, data_name, epoch):
                 nclusters = clusters.shape[0]
 
                 coords = batch['locs'].cuda()                          # (N, 1 + 3), long, cuda, dimension 0 for batch_idx
-                instance_info = batch['instance_info'].cuda()          # (N, 9), float32, cuda, (meanxyz, minxyz, maxxyz)
                 instance_labels = batch['instance_labels'].cuda()      # (N), long, cuda, 0~total_nInst, -100
                 labels = batch['labels'].cuda()                        # (N), long, cuda
                 instance_pointnum = batch['instance_pointnum'].cuda()  # (total_nInst), int, cuda
@@ -184,7 +239,7 @@ def test(model, model_fn, data_name, epoch):
             start = time.time()
 
             ##### print
-            logger.info("instance iter: {}/{} point_num: {} ncluster: {} time: total {:.2f}s inference {:.2f}s save {:.2f}s".format(batch['id'][0] + 1, len(dataset.test_files), N, nclusters, end, end1, end3))
+            logger.info("instance iter: {}/{} point_num: {} ncluster: {} time: total {:.2f}s inference {:.2f}s save {:.2f}s".format(batch['id'][0] + 1, len(dataset.val_file_names), N, nclusters, end, end1, end3))
 
         ##### evaluation
         if cfg.eval:
