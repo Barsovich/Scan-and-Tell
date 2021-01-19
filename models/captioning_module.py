@@ -218,7 +218,7 @@ class SceneCaptionModule(nn.Module):
         if not is_eval:
             data_dict = self.forward_sample_batch(data_dict, backbone, max_len)
         else:
-            data_dict = self.forward_scene_batch(data_dict, use_tf, max_len)
+            data_dict = self.forward_scene_batch(data_dict, backbone, use_tf, max_len)
 
         return data_dict
 
@@ -288,7 +288,7 @@ class SceneCaptionModule(nn.Module):
         return data_dict
 
 
-    def forward_scene_batch(self, data_dict, use_tf=False, max_len=CONF.TRAIN.MAX_DES_LEN):
+    def forward_scene_batch(self, data_dict, backbone='votenet',use_tf=False, max_len=CONF.TRAIN.MAX_DES_LEN):
         """
         generate descriptions based on input tokens and object features
         """
@@ -296,54 +296,89 @@ class SceneCaptionModule(nn.Module):
         # unpack
         word_embs = data_dict["lang_feat"] # batch_size, max_len, emb_size
         des_lens = data_dict["lang_len"] # batch_size
-        obj_feats = data_dict["proposal_feature"] # batch_size, num_proposals, feat_size
+        obj_feats = data_dict["proposal_feature"] # batch_size, num_proposals, feat_size OR total_num_proposals, feat_size
         
         num_words = des_lens[0]
         batch_size = des_lens.shape[0]
 
         # transform the features
-        obj_feats = self.map_feat(obj_feats) # batch_size, num_proposals, emb_size
+        obj_feats = self.map_feat(obj_feats) # batch_size, num_proposals, emb_size OR total_num_proposals, feat_size
 
-        # recurrent from 0 to max_len - 2
+        # recurrent from 0 to max_len - 2 
         outputs = []
-        for prop_id in range(self.num_proposals):
-            # select object features
-            target_feats = obj_feats[:, prop_id] # batch_size, emb_size
+        if backbone == 'votenet':
+            for prop_id in range(self.num_proposals):
+                # select object features
+                target_feats = obj_feats[:, prop_id] # batch_size, emb_size
 
-            # start recurrence
-            prop_outputs = []
-            hidden = target_feats # batch_size, emb_size
-            step_id = 0
-            step_input = word_embs[:, step_id] # batch_size, emb_size
-            while True:
-                # feed
-                step_output, hidden = self.step(step_input, hidden)
-                step_output = self.classifier(step_output) # batch_size, num_vocabs
-                
-                # predicted word
-                step_preds = []
-                for batch_id in range(batch_size):
-                    idx = step_output[batch_id].argmax() # 0 ~ num_vocabs
+                # start recurrence
+                prop_outputs = []
+                hidden = target_feats # batch_size, emb_size
+                step_id = 0
+                step_input = word_embs[:, step_id] # batch_size, emb_size
+                while True:
+                    # feed
+                    step_output, hidden = self.step(step_input, hidden)
+                    step_output = self.classifier(step_output) # batch_size, num_vocabs
+                    
+                    # predicted word
+                    step_preds = []
+                    for batch_id in range(batch_size):
+                        idx = step_output[batch_id].argmax() # 0 ~ num_vocabs
+                        word = self.vocabulary["idx2word"][str(idx.item())]
+                        emb = torch.FloatTensor(self.embeddings[word]).unsqueeze(0).cuda() # 1, emb_size
+                        step_preds.append(emb)
+
+                    step_preds = torch.cat(step_preds, dim=0) # batch_size, emb_size
+
+                    # store
+                    step_output = step_output.unsqueeze(1) # batch_size, 1, num_vocabs 
+                    prop_outputs.append(step_output)
+
+                    # next step
+                    step_id += 1
+                    if not use_tf and step_id == max_len - 1: break # exit for eval mode
+                    if use_tf and step_id == num_words - 1: break # exit for train mode
+                    step_input = step_preds if not use_tf else word_embs[:, step_id] # batch_size, emb_size
+
+                prop_outputs = torch.cat(prop_outputs, dim=1).unsqueeze(1) # batch_size, 1, num_words - 1/max_len, num_vocabs
+                outputs.append(prop_outputs)
+
+            outputs = torch.cat(outputs, dim=1) # batch_size, num_proposals, num_words - 1/max_len, num_vocabs
+
+        elif backbone == 'pointgroup':
+            ### works only for val batch_size = 1 (for now)
+            for prop in obj_feats:
+
+                #recurrence
+                prop_outputs = []
+                hidden = prop 
+                step_id = 0
+                step_input = word_embs[0, step_id] # 1, emb_size
+
+                while True:
+                    #feed
+                    step_output, hidden = self.step(step_input, hidden)
+                    step_output = self.classifier(step_output) # 1, num_vocabs
+
+                    #predicted word
+                    idx = step_output.argmax() # 0 ~ num_vocabs
                     word = self.vocabulary["idx2word"][str(idx.item())]
-                    emb = torch.FloatTensor(self.embeddings[word]).unsqueeze(0).cuda() # 1, emb_size
-                    step_preds.append(emb)
+                    step_pred = torch.FloatTensor(self.embeddings[word]).unsqueeze(0).cuda() # 1, emb_size
 
-                step_preds = torch.cat(step_preds, dim=0) # batch_size, emb_size
+                    prop_outputs.append(step_output)
 
-                # store
-                step_output = step_output.unsqueeze(1) # batch_size, 1, num_vocabs 
-                prop_outputs.append(step_output)
+                    #next step
+                    step_id += 1
+                    if not use_tf and step_id == max_len - 1: break # exit for eval mode --use_tf is set to False everywhere
+                    if use_tf and step_id == num_words - 1: break # exit for train mode
+                    step_input = step_pred if not use_tf else word_embs[0, step_id] # 1, emb_size
 
-                # next step
-                step_id += 1
-                if not use_tf and step_id == max_len - 1: break # exit for eval mode
-                if use_tf and step_id == num_words - 1: break # exit for train mode
-                step_input = step_preds if not use_tf else word_embs[:, step_id] # batch_size, emb_size
+                prop_outputs = torch.cat(prop_outputs,dim=0).unsqueeze(0) # 1, num_words - 1/max_len, num_vocabs
+                outputs.append(prop_outputs)
 
-            prop_outputs = torch.cat(prop_outputs, dim=1).unsqueeze(1) # batch_size, 1, num_words - 1/max_len, num_vocabs
-            outputs.append(prop_outputs)
+            outputs = torch.cat(outputs,dim=0) # num_proposals, num_words - 1/max_len, num_vocabs
 
-        outputs = torch.cat(outputs, dim=1) # batch_size, num_proposals, num_words - 1/max_len, num_vocabs
 
         # store
         data_dict["lang_cap"] = outputs

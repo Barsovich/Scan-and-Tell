@@ -80,7 +80,7 @@ class Dataset:
         logger.info('Validation on {} object samples from {} scenes.'.format(len(self.val_data),len(val_file_names)))
 
         val_set = list(range(len(self.val_data)))
-        self.val_data_loader = DataLoader(val_set, batch_size=self.batch_size, collate_fn=self.valMerge, num_workers=self.val_workers,
+        self.val_data_loader = DataLoader(val_set, batch_size=1, collate_fn=self.valMerge, num_workers=self.val_workers,
                                           shuffle=False, drop_last=False, pin_memory=True)
 
 
