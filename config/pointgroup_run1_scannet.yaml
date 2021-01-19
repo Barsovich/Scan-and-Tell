@@ -60,7 +60,7 @@ GROUP:
   cluster_radius: 0.03
   cluster_meanActive: 50
   cluster_shift_meanActive: 300
-  cluster_npoint_thre: 50
+  cluster_npoint_thre: 10
 
   prepare_epochs: 128
 
@@ -72,7 +72,7 @@ TEST:
 
   TEST_NMS_THRESH: 0.3
   TEST_SCORE_THRESH: 0.09
-  TEST_NPOINT_THRESH: 100
+  TEST_NPOINT_THRESH: 20
 
   eval: True
   save_semantic: False
