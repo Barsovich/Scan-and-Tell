@@ -348,13 +348,14 @@ class SceneCaptionModule(nn.Module):
 
         elif backbone == 'pointgroup':
             ### works only for val batch_size = 1 (for now)
+            #because we have no information on which proposal belongs to which scene and so we cannot take the corret word_emb
             for prop in obj_feats:
 
                 #recurrence
                 prop_outputs = []
-                hidden = prop 
+                hidden = prop.unsqueeze(0) # 1, emb_size
                 step_id = 0
-                step_input = word_embs[0, step_id] # 1, emb_size
+                step_input = word_embs[:, step_id] # 1, emb_size
 
                 while True:
                     #feed
@@ -372,7 +373,7 @@ class SceneCaptionModule(nn.Module):
                     step_id += 1
                     if not use_tf and step_id == max_len - 1: break # exit for eval mode --use_tf is set to False everywhere
                     if use_tf and step_id == num_words - 1: break # exit for train mode
-                    step_input = step_pred if not use_tf else word_embs[0, step_id] # 1, emb_size
+                    step_input = step_pred if not use_tf else word_embs[:, step_id] # 1, emb_size
 
                 prop_outputs = torch.cat(prop_outputs,dim=0).unsqueeze(0) # 1, num_words - 1/max_len, num_vocabs
                 outputs.append(prop_outputs)
