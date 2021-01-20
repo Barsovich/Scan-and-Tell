@@ -504,7 +504,7 @@ def eval_cap_pointgroup(model,cfg,epoch,dataset,dataloader,no_detection=False,no
     
         ##TODO: equivelent steps of feed_scene_cap()
 
-        if epoch > cfg.prepare_epochs
+        if epoch > cfg.prepare_epochs:
             # corpus
             corpus_path = os.path.join(cfg.exp_path, "epoch{}_val".format(epoch), "corpus_val.json")
             if not os.path.exists(corpus_path) or force:

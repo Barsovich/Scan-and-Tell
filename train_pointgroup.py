@@ -202,11 +202,11 @@ def eval_epoch(val_loader, model, epoch,dataset):
     #         sys.stdout.write("\riter: {}/{} loss: {:.4f}({:.4f})".format(i + 1, len(val_loader), am_dict['loss'].val, am_dict['loss'].avg))
     #         if (i == len(val_loader) - 1): print()
 
-        logger.info("epoch: {}/{}, val loss: {:.4f}, time: {}s".format(epoch, cfg.epochs, am_dict['loss'].avg, time.time() - start_epoch))
+    logger.info("epoch: {}/{}, val loss: {:.4f}, time: {}s".format(epoch, cfg.epochs, am_dict['loss'].avg, time.time() - start_epoch))
 
-        for k in am_dict.keys():
-            if k in visual_dict.keys():
-                writer.add_scalar(k + '_eval', am_dict[k].avg, epoch)
+    for k in am_dict.keys():
+        if k in visual_dict.keys():
+            writer.add_scalar(k + '_eval', am_dict[k].avg, epoch)
 
 
 if __name__ == '__main__':
