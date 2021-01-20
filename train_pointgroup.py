@@ -170,7 +170,7 @@ def train_epoch(train_loader, model, optimizer, epoch):
 def eval_epoch(val_loader, model, epoch,dataset):
     logger.info('>>>>>>>>>>>>>>>> Start Evaluation >>>>>>>>>>>>>>>>')
     
-    am_dict = eval_cap_pointgroup(model,cfg,epoch,dataset,val_loader,
+    am_dict,visual_dict = eval_cap_pointgroup(model,cfg,epoch,dataset,val_loader,
         no_detection=cfg.no_detection,no_caption=cfg.no_caption,force=True)
 
     # am_dict = {}

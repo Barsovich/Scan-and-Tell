@@ -30,6 +30,7 @@ from config.config_votenet import CONF
 from lib.ap_helper import parse_predictions
 from lib.loss import SoftmaxRankingLoss
 from utils.box_util import box3d_iou, box3d_iou_batch_tensor
+import utils.utils_pointgroup as utils_pointgroup
 from lib.loss_helper import get_scene_cap_loss, get_pointgroup_cap_loss
 
 # constants
@@ -418,7 +419,7 @@ def eval_cap(model, device, dataset, dataloader, phase, folder,
     else:
         return bleu, cider, rouge, meteor, cls_acc
 
-def feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,):
+def feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,no_detection=False):
 
     semantic_label_idx = [3,4,5,6,7,8,9,10,11,12,14,16,24,28,33,34,36,39]
     
@@ -440,7 +441,7 @@ def feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,):
             data_dict = model(data_dict, epoch, use_tf=False, is_eval=True) 
 
             loss, loss_dict, visual_dict, meter_dict = get_pointgroup_cap_loss(data_dict,cfg,epoch,
-            no_detection=cfg.no_detection,no_caption=False)
+            detection=not no_detection,caption=False)
 
             if epoch > cfg.prepare_epochs:
                 # all cap related actions come here 
@@ -449,7 +450,7 @@ def feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,):
                 semantic_scores = data_dict['semantic_scores']
                 scores, proposals_idx, proposals_offset = data_dict['proposal_scores']
                 captions = data_dict["lang_cap"].argmax(-1) # num_proposals, max_len - 1
-                dataset_id = data_dict["dataset_idx"]
+                dataset_id = data_dict["id"][0]
 
                 semantic_pred = semantic_scores.max(1)[1]
                 scores_pred = torch.sigmoid(scores.view(-1))
@@ -460,11 +461,13 @@ def feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,):
                 semantic_id = torch.tensor(semantic_label_idx, device=scores_pred.device)[semantic_pred[proposals_idx[:, 1][proposals_offset[:-1].long()].long()]] # (nProposal), long
 
                 score_mask = (scores_pred > cfg.TEST_SCORE_THRESH)
-                proposals_pointum = proposals_pred.sum(1)
+                proposals_pointnum = proposals_pred.sum(1)
                 npoint_mask = (proposals_pointnum > cfg.TEST_NPOINT_THRESH)
                 mask = score_mask * npoint_mask
 
                 proposals_pred = proposals_pred[mask]
+
+                import pdb; pdb.set_trace()
 
 
 
@@ -491,16 +494,16 @@ def eval_cap_pointgroup(model,cfg,epoch,dataset,dataloader,no_detection=False,no
                 data_dict = model(data_dict, epoch, use_tf=False, is_eval=False) 
 
                 loss, loss_dict, visual_dict, meter_dict = get_pointgroup_cap_loss(data_dict,cfg,epoch,
-                no_detection=False,no_caption=True)
+                detection=not no_detection,caption=False)
 
                 ##### meter_dict
                 for k, v in meter_dict.items():
                     if k not in am_dict.keys():
-                        am_dict[k] = utils.AverageMeter()
+                        am_dict[k] = utils_pointgroup.AverageMeter()
                     am_dict[k].update(v[0], v[1])
     else:
 
-        candidates, meter_dict = feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader)
+        candidates, meter_dict = feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,no_detection)
     
         ##TODO: equivelent steps of feed_scene_cap()
 
@@ -539,11 +542,11 @@ def eval_cap_pointgroup(model,cfg,epoch,dataset,dataloader,no_detection=False,no
         ##### meter_dict
         for k, v in meter_dict.items():
             if k not in am_dict.keys():
-                am_dict[k] = utils.AverageMeter()
+                am_dict[k] = utils_pointgroup.AverageMeter()
             am_dict[k].update(v[0], v[1])
 
 
-    return am_dict
+    return am_dict, visual_dict
 
 def get_eval(data_dict, config, caption, use_lang_classifier=False, use_oracle=False, use_cat_rand=False, use_best=False, post_processing=None):
     """ Loss functions
