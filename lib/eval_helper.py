@@ -418,7 +418,11 @@ def eval_cap(model, device, dataset, dataloader, phase, folder,
     else:
         return bleu, cider, rouge, meteor, cls_acc
 
-def feed_pointgroup_cap(model,epoch,dataset,dataloader,):
+def feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,):
+
+    semantic_label_idx = [3,4,5,6,7,8,9,10,11,12,14,16,24,28,33,34,36,39]
+    
+    candidates = {}
 
     with torch.no_grad():
         #model.eval()
@@ -436,12 +440,37 @@ def feed_pointgroup_cap(model,epoch,dataset,dataloader,):
             data_dict = model(data_dict, epoch, use_tf=False, is_eval=True) 
 
             loss, loss_dict, visual_dict, meter_dict = get_pointgroup_cap_loss(data_dict,cfg,epoch,
-            no_detection=no_detection,no_caption=False)
+            no_detection=cfg.no_detection,no_caption=False)
+
+            if epoch > cfg.prepare_epochs:
+                # all cap related actions come here 
+                # unpack
+                N = data_dict['feats'].shape[0]
+                semantic_scores = data_dict['semantic_scores']
+                scores, proposals_idx, proposals_offset = data_dict['proposal_scores']
+                captions = data_dict["lang_cap"].argmax(-1) # num_proposals, max_len - 1
+                dataset_id = data_dict["dataset_idx"]
+
+                semantic_pred = semantic_scores.max(1)[1]
+                scores_pred = torch.sigmoid(scores.view(-1))
+
+                proposals_pred = torch.zeros((proposals_offset.shape[0] - 1, N), dtype=torch.int, device=scores_pred.device) # (nProposal, N), int, cuda
+                proposals_pred[proposals_idx[:, 0].long(), proposals_idx[:, 1].long()] = 1
+                
+                semantic_id = torch.tensor(semantic_label_idx, device=scores_pred.device)[semantic_pred[proposals_idx[:, 1][proposals_offset[:-1].long()].long()]] # (nProposal), long
+
+                score_mask = (scores_pred > cfg.TEST_SCORE_THRESH)
+                proposals_pointum = proposals_pred.sum(1)
+                npoint_mask = (proposals_pointnum > cfg.TEST_NPOINT_THRESH)
+                mask = score_mask * npoint_mask
+
+                proposals_pred = proposals_pred[mask]
 
 
-    return meter_dict
 
-def eval_cap_pointgroup(model,epoch,dataset,dataloader,no_detection=False,no_caption=False):
+    return candidates, meter_dict
+
+def eval_cap_pointgroup(model,cfg,epoch,dataset,dataloader,no_detection=False,no_caption=False,force=True):
     am_dict = {}
 
     if no_caption:
@@ -471,11 +500,39 @@ def eval_cap_pointgroup(model,epoch,dataset,dataloader,no_detection=False,no_cap
                     am_dict[k].update(v[0], v[1])
     else:
 
-        meter_dict = feed_pointgroup_cap(model,epoch,dataset,dataloader)
-        
+        candidates, meter_dict = feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader)
+    
         ##TODO: equivelent steps of feed_scene_cap()
-        ## and then eval_cap to write captions in corpus and find metrics
 
+        if epoch > cfg.prepare_epochs
+            # corpus
+            corpus_path = os.path.join(cfg.exp_path, "epoch{}_val".format(epoch), "corpus_val.json")
+            if not os.path.exists(corpus_path) or force:
+                print("preparing corpus...")
+                corpus = prepare_corpus(dataset.val_data, max_len)
+                with open(corpus_path, "w") as f:
+                    json.dump(corpus, f, indent=4)
+            else:
+                print("loading corpus...")
+                with open(corpus_path) as f:
+                    corpus = json.load(f)
+
+            pred_path = os.path.join(cfg.exp_path, "epoch{}_val".format(epoch), "pred_val.json")
+            # check candidates
+            # NOTE: make up the captions for the undetected object by "sos eos"
+            candidates = check_candidates(corpus, candidates)
+
+            candidates = organize_candidates(corpus, candidates)
+
+            with open(pred_path, "w") as f:
+                json.dump(candidates, f, indent=4)
+
+            # compute scores
+            print("computing scores...")
+            bleu = capblue.Bleu(4).compute_score(corpus, candidates)
+            cider = capcider.Cider().compute_score(corpus, candidates)
+            rouge = caprouge.Rouge().compute_score(corpus, candidates)
+            meteor = capmeteor.Meteor().compute_score(corpus, candidates)
 
         #decide if captioning metrics should be stored, printed & logged like this or differently
 

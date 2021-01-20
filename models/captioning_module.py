@@ -49,7 +49,7 @@ def select_target(data_dict,backbone='votenet'):
         target_instance_pointnum = data_dict['target_instance_pointnum']
 
         ious = pointgroup_ops.get_iou(proposals_idx[:, 1].cuda(), proposals_offset.cuda(),
-            target_instance_labels.cuda(), target_instance_pointnum.cuda()) # shape: [num_proposals, batch_size]
+            target_instance_labels, target_instance_pointnum) # shape: [num_proposals, batch_size]
 
         target_ious, target_ids = ious.max(0)
 

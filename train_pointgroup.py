@@ -14,6 +14,7 @@ from copy import deepcopy
 from config.config_pointgroup import cfg
 from utils.log import logger
 from lib.loss_helper import get_pointgroup_cap_loss
+from lib.eval_helper import eval_cap_pointgroup
 import utils.utils_pointgroup as utils
 
 SCANREFER_TRAIN = json.load(open(os.path.join('data', "ScanRefer_filtered_train.json")))
@@ -120,7 +121,8 @@ def train_epoch(train_loader, model, optimizer, epoch):
         #loss, _, visual_dict, meter_dict = model_fn(batch, model, epoch)
 
         ##### loss calculation
-        loss, loss_dict, visual_dict, meter_dict = get_pointgroup_cap_loss(data_dict,cfg,epoch)
+        loss, loss_dict, visual_dict, meter_dict = get_pointgroup_cap_loss(data_dict,cfg,epoch,
+            not cfg.no_detection, not cfg.no_caption)
 
         ##### meter_dict
         for k, v in meter_dict.items():
@@ -165,36 +167,40 @@ def train_epoch(train_loader, model, optimizer, epoch):
             writer.add_scalar(k+'_train', am_dict[k].avg, epoch)
 
 
-def eval_epoch(val_loader, model, epoch):
+def eval_epoch(val_loader, model, epoch,dataset):
     logger.info('>>>>>>>>>>>>>>>> Start Evaluation >>>>>>>>>>>>>>>>')
-    am_dict = {}
+    
+    am_dict = eval_cap_pointgroup(model,cfg,epoch,dataset,val_loader,
+        no_detection=cfg.no_detection,no_caption=cfg.no_caption,force=True)
 
-    with torch.no_grad():
-        model.eval()
-        start_epoch = time.time()
-        for i, data_dict in enumerate(val_loader):
+    # am_dict = {}
 
-            #move to cuda 
-            for key in data_dict:
-                if type(data_dict[key]) == torch.Tensor:
-                    data_dict[key] = data_dict[key].cuda()
-                else:
-                    pass
+    # with torch.no_grad():
+    #     model.eval()
+    #     start_epoch = time.time()
+    #     for i, data_dict in enumerate(val_loader):
 
-            ##### prepare input and forward
-            data_dict = model(data_dict, epoch, use_tf=False, is_eval=True)
+    #         #move to cuda 
+    #         for key in data_dict:
+    #             if type(data_dict[key]) == torch.Tensor:
+    #                 data_dict[key] = data_dict[key].cuda()
+    #             else:
+    #                 pass
 
-            loss, loss_dict, visual_dict, meter_dict = get_pointgroup_cap_loss(data_dict,cfg,epoch)
+    #         ##### prepare input and forward
+    #         data_dict = model(data_dict, epoch, use_tf=False, is_eval=True)
 
-            ##### meter_dict
-            for k, v in meter_dict.items():
-                if k not in am_dict.keys():
-                    am_dict[k] = utils.AverageMeter()
-                am_dict[k].update(v[0], v[1])
+    #         loss, loss_dict, visual_dict, meter_dict = get_pointgroup_cap_loss(data_dict,cfg,epoch)
 
-            ##### print
-            sys.stdout.write("\riter: {}/{} loss: {:.4f}({:.4f})".format(i + 1, len(val_loader), am_dict['loss'].val, am_dict['loss'].avg))
-            if (i == len(val_loader) - 1): print()
+    #         ##### meter_dict
+    #         for k, v in meter_dict.items():
+    #             if k not in am_dict.keys():
+    #                 am_dict[k] = utils.AverageMeter()
+    #             am_dict[k].update(v[0], v[1])
+
+    #         ##### print
+    #         sys.stdout.write("\riter: {}/{} loss: {:.4f}({:.4f})".format(i + 1, len(val_loader), am_dict['loss'].val, am_dict['loss'].avg))
+    #         if (i == len(val_loader) - 1): print()
 
         logger.info("epoch: {}/{}, val loss: {:.4f}, time: {}s".format(epoch, cfg.epochs, am_dict['loss'].avg, time.time() - start_epoch))
 
@@ -268,6 +274,6 @@ if __name__ == '__main__':
     for epoch in range(start_epoch, cfg.epochs + 1):
         train_epoch(dataset.train_data_loader, model, optimizer, epoch)
 
-        if utils.is_multiple(epoch, cfg.save_freq) or utils.is_power2(epoch):
-            # eval_epoch(dataset.val_data_loader, model, epoch)
-            pass
+        if utils.is_multiple(epoch, cfg.save_freq,) or utils.is_power2(epoch):
+            eval_epoch(dataset.val_data_loader, model, epoch, dataset)
+            #pass
