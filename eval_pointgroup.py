@@ -98,24 +98,24 @@ def get_scanrefer(scanrefer_train, scanrefer_val, num_scenes):
     return new_scanrefer_train, new_scanrefer_val, all_scene_list
 
 
-def test(model, model_fn, data_name, epoch):
+def test(model, dataloader, epoch):
     logger.info('>>>>>>>>>>>>>>>> Start Evaluation >>>>>>>>>>>>>>>>')
 
-    scanrefer_train, scanrefer_val, all_scene_list = get_scanrefer(SCANREFER_TRAIN, SCANREFER_VAL, -1)
-    scanrefer = {
-        "train": scanrefer_train,
-        "val": scanrefer_val
-    }
+    # scanrefer_train, scanrefer_val, all_scene_list = get_scanrefer(SCANREFER_TRAIN, SCANREFER_VAL, -1)
+    # scanrefer = {
+    #     "train": scanrefer_train,
+    #     "val": scanrefer_val
+    # }
 
-    if cfg.dataset == 'scannet_data':
-        if data_name == 'scannet':
-            from data.dataset_pointgroup import Dataset
-            dataset = Dataset(scanrefer=scanrefer)
-            dataset.valLoader()
-        else:
-            print("Error: no data loader - " + data_name)
-            exit(0)
-    dataloader = dataset.val_data_loader
+    # if cfg.dataset == 'scannet_data':
+    #     if data_name == 'scannet':
+    #         from data.dataset_pointgroup import Dataset
+    #         dataset = Dataset(scanrefer=scanrefer)
+    #         dataset.valLoader()
+    #     else:
+    #         print("Error: no data loader - " + data_name)
+    #         exit(0)
+    # dataloader = dataset.val_data_loader
 
     with torch.no_grad():
         model = model.eval()
@@ -126,24 +126,34 @@ def test(model, model_fn, data_name, epoch):
         AP_IOU_THRESHOLDS = [0.25, 0.5]
         AP_CALCULATOR_LIST = [ap_helper.APCalculator(iou_thresh, point_group=True) for iou_thresh in AP_IOU_THRESHOLDS]
 
-        for i, batch in enumerate(dataloader):
+        for i, data_dict in enumerate(dataloader):
+
+            #move to cuda 
+            for key in data_dict:
+                if type(data_dict[key]) == torch.Tensor:
+                    data_dict[key] = data_dict[key].cuda()
+                else:
+                    pass
+
             N = batch['feats'].shape[0]
-            test_scene_name = dataset.val_file_names[int(batch['id'][0])].split('/')[-1][:12]
+            #test_scene_name = dataset.val_file_names[int(batch['id'][0])].split('/')[-1][:12]
+            test_scene_name = dataset.val_data[data_dict['id'][0]]['scene_id']
             start1 = time.time()
-            preds = model_fn(batch, model, epoch)
+            data_dict = model(data_dict, epoch)
             end1 = time.time() - start1
 
             ##### get predictions (#1 semantic_pred, pt_offsets; #2 scores, proposals_pred)
-            semantic_scores = preds['semantic']  # (N, nClass=20) float32, cuda
+            semantic_scores = data_dict['semantic_scores']  # (N, nClass=20) float32, cuda
             semantic_pred = semantic_scores.max(1)[1]  # (N) long, cuda
 
-            pt_offsets = preds['pt_offsets']    # (N, 3), float32, cuda
+            pt_offsets = data_dict['pt_offsets']    # (N, 3), float32, cuda
 
             if (epoch > cfg.prepare_epochs):
-                scores = preds['score']   # (nProposal, 1) float, cuda
+                scores, proposals_idx, proposals_offset = data_dict['proposal_scores'] 
+                #scores = preds['score']   # (nProposal, 1) float, cuda
                 scores_pred = torch.sigmoid(scores.view(-1))
 
-                proposals_idx, proposals_offset = preds['proposals']
+                #proposals_idx, proposals_offset = preds['proposals']
                 # proposals_idx: (sumNPoint, 2), int, cpu, dim 0 for cluster_id, dim 1 for corresponding point idxs in N
                 # proposals_offset: (nProposal + 1), int, cpu
                 proposals_pred = torch.zeros((proposals_offset.shape[0] - 1, N), dtype=torch.int, device=scores_pred.device) # (nProposal, N), int, cuda
@@ -181,10 +191,10 @@ def test(model, model_fn, data_name, epoch):
 
                 nclusters = clusters.shape[0]
 
-                coords = batch['locs'].cuda()                          # (N, 1 + 3), long, cuda, dimension 0 for batch_idx
-                instance_labels = batch['instance_labels'].cuda()      # (N), long, cuda, 0~total_nInst, -100
-                labels = batch['labels'].cuda()                        # (N), long, cuda
-                instance_pointnum = batch['instance_pointnum'].cuda()  # (total_nInst), int, cuda
+                coords = data_dict['locs']                          # (N, 1 + 3), long, cuda, dimension 0 for batch_idx
+                instance_labels = data_dict['instance_labels']    # (N), long, cuda, 0~total_nInst, -100
+                labels = data_dict['labels']                      # (N), long, cuda
+                instance_pointnum = data_dict['instance_pointnum']  # (total_nInst), int, cuda
                 gt_cluster_count = instance_pointnum.shape[0]
                 
                 # calculate AP
@@ -281,12 +291,33 @@ if __name__ == '__main__':
     logger.info('Classes: {}'.format(cfg.classes))
 
     if model_name == 'pointgroup':
-        from models.pointgroup import PointGroup as Network
-        from models.pointgroup import model_fn_decorator
+        from models.capnet import CapNet
+        #from models.pointgroup import PointGroup as Network
+        #from models.pointgroup import model_fn_decorator
     else:
-        print("Error: no model version " + model_name)
+        print("Error: no model - " + model_name)
         exit(0)
-    model = Network(cfg)
+
+    if cfg.dataset == 'scannet_data':
+        if data_name == 'scannet':
+            scanrefer_train, scanrefer_val, all_scene_list = get_scanrefer(SCANREFER_TRAIN, SCANREFER_VAL, -1)
+            scanrefer = {
+                "train": scanrefer_train,
+                "val": scanrefer_val
+            }
+            import data.dataset_pointgroup
+            dataset = data.dataset_pointgroup.Dataset(scanrefer)
+            #dataset.trainLoader()
+            dataset.valLoader()
+        else:
+            print("Error: no data loader - " + data_name)
+            exit(0)
+
+    dataloader = dataset.val_data_loader
+    vocabulary = dataset.vocabulary
+    embeddings = dataset.glove
+
+    model = CapNet(vocabulary, embeddings, cfg, 'pointgroup',no_caption=cfg.no_caption,prepare_epochs=cfg.prepare_epochs)
 
     use_cuda = torch.cuda.is_available()
     logger.info('cuda available: {}'.format(use_cuda))
@@ -297,10 +328,10 @@ if __name__ == '__main__':
     logger.info('#classifier parameters (model): {}'.format(sum([x.nelement() for x in model.parameters()])))
 
     ##### model_fn (criterion)
-    model_fn = model_fn_decorator(test=True)
+    #model_fn = model_fn_decorator(test=True)
 
     ##### load model
     utils.checkpoint_restore(model, cfg.exp_path, cfg.config.split('/')[-1][:-5], use_cuda, cfg.test_epoch, dist=False, f=cfg.pretrain)      # resume from the latest epoch, or specify the epoch to restore
 
     ##### evaluate
-    test(model, model_fn, data_name, cfg.test_epoch)
+    test(model, dataloader, cfg.test_epoch)
