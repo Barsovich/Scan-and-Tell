@@ -275,4 +275,5 @@ if __name__ == '__main__':
         train_epoch(dataset.train_data_loader, model, optimizer, epoch)
 
         if utils.is_multiple(epoch, cfg.save_freq,) or utils.is_power2(epoch):
-            eval_epoch(dataset.val_data_loader, model, epoch, dataset)
+            # eval_epoch(dataset.val_data_loader, model, epoch, dataset)
+            pass

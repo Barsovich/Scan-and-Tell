@@ -527,6 +527,7 @@ def feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,no_detection=False):
                         candidates[key] = [caption_decoded]
                     except KeyError:
                         continue
+            break
     return candidates, meter_dict, visual_dict
 
 def process_gt2pred(gt2pred):
@@ -581,7 +582,7 @@ def eval_cap_pointgroup(model,cfg,epoch,dataset,dataloader,no_detection=False,no
 
         if epoch > cfg.prepare_epochs:
             # corpus
-            corpus_path = os.path.join(cfg.exp_path, "epoch{}_val".format(epoch), "corpus_val.json")
+            corpus_path = os.path.join(cfg.exp_path, "epoch{}".format(epoch) + "_corpus_val.json")
             if not os.path.exists(corpus_path) or force:
                 print("preparing corpus...")
                 corpus = prepare_corpus(dataset.val_data, max_len)
@@ -592,7 +593,7 @@ def eval_cap_pointgroup(model,cfg,epoch,dataset,dataloader,no_detection=False,no
                 with open(corpus_path) as f:
                     corpus = json.load(f)
 
-            pred_path = os.path.join(cfg.exp_path, "epoch{}_val".format(epoch), "pred_val.json")
+            pred_path = os.path.join(cfg.exp_path, "epoch{}".format(epoch) + "_pred_val.json")
             # check candidates
             # NOTE: make up the captions for the undetected object by "sos eos"
             candidates = check_candidates(corpus, candidates)
@@ -608,20 +609,19 @@ def eval_cap_pointgroup(model,cfg,epoch,dataset,dataloader,no_detection=False,no
             cider = capcider.Cider().compute_score(corpus, candidates)
             rouge = caprouge.Rouge().compute_score(corpus, candidates)
             meteor = capmeteor.Meteor().compute_score(corpus, candidates)
-            print(f"Captioning: BLEU: {bleu}, CIDEr: {cider}, ROUGE: {rouge}, METEOR: {meteor}")
-            visual_dict['bleu'] = bleu
-            visual_dict['cider'] = cider
-            visual_dict['rouge'] = rouge
-            visual_dict['meteor'] = meteor
+            visual_dict['bleu'] = bleu[0][3]
+            visual_dict['cider'] = cider[0]
+            visual_dict['rouge'] = rouge[0]
+            visual_dict['meteor'] = meteor[0]
             if 'bleu' not in am_dict.keys():
                 am_dict['bleu'] = utils_pointgroup.AverageMeter()
                 am_dict['cider'] = utils_pointgroup.AverageMeter()
                 am_dict['rouge'] = utils_pointgroup.AverageMeter()
                 am_dict['meteor'] = utils_pointgroup.AverageMeter()
-            am_dict['bleu'].update(bleu, 1)
-            am_dict['cider'].update(cider, 1)
-            am_dict['rouge'].update(rouge, 1)
-            am_dict['meteor'].update(meteor, 1)
+            am_dict['bleu'].update(bleu[0][3], 1)
+            am_dict['cider'].update(cider[0], 1)
+            am_dict['rouge'].update(rouge[0], 1)
+            am_dict['meteor'].update(meteor[0], 1)
 
         ##### meter_dict
         for k, v in meter_dict.items():
