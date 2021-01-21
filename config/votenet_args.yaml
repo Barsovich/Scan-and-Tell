@@ -9,7 +9,7 @@ ARGS:
   verbose: 10
 
   epoch: 20
-  val_step: 100
+  val_step: 2000
   lr: 0.001
   wd: 0.00001
   num_points: 40000
@@ -32,7 +32,7 @@ ARGS:
   use_tf: True
   use_color: True
   use_normal: False
-  use_multiview: False
+  use_multiview: True
   use_topdown: False
   use_relation: False
   use_new: False

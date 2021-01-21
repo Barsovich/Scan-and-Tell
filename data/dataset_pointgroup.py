@@ -43,7 +43,9 @@ class Dataset:
         self.mode = cfg.mode
 
         self.use_multiview = cfg.use_multiview
-        self.multiview_data = {}
+        if self.use_multiview:
+            self.multiview_data = h5py.File(os.path.join(self.data_root, self.dataset, 'enet_feats_maxpool.hdf5'), "r",
+                                        libver="latest")
 
         if test:
             self.test_split = cfg.split  # val or test
@@ -387,11 +389,7 @@ class Dataset:
             
             feat = torch.from_numpy(rgb) + torch.randn(3) * 0.1
             if self.use_multiview:
-                pid = mp.current_process().pid
-                if pid not in self.multiview_data:
-                    self.multiview_data[pid] = h5py.File(os.path.join(self.data_root,self.dataset,'enet_feats_maxpool.hdf5'), "r", libver="latest")
-
-                multiview = torch.from_numpy(self.multiview_data[pid][scene_id][:])[valid_idxs]
+                multiview = torch.from_numpy(self.multiview_data[scene_id][:])[valid_idxs]
                 feat = torch.cat([feat,multiview],1)
 
             feats.append(feat)
@@ -519,11 +517,7 @@ class Dataset:
 
             feat = torch.from_numpy(rgb) 
             if self.use_multiview:
-                pid = mp.current_process().pid
-                if pid not in self.multiview_data:
-                    self.multiview_data[pid] = h5py.File(os.path.join(self.data_root,self.dataset,'enet_feats_maxpool.hdf5'), "r", libver="latest")
-
-                multiview = torch.from_numpy(self.multiview_data[pid][scene_id][:])[valid_idxs]
+                multiview = torch.from_numpy(self.multiview_data[scene_id][:])[valid_idxs]
                 feat = torch.cat([feat,multiview],1)
 
             feats.append(feat)

@@ -33,11 +33,11 @@ STRUCTURE:
 
 
 TRAIN:
-  epochs: 25
-  train_workers: 16 # data loader workers
+  epochs: 15
+  train_workers: 4 # data loader workers
   optim: Adam # Adam or SGD
   lr: 0.001
-  step_epoch: 25
+  step_epoch: 15
   multiplier: 0.5
   momentum: 0.9
   weight_decay: 0.0001
@@ -60,19 +60,19 @@ GROUP:
   cluster_radius: 0.03
   cluster_meanActive: 50
   cluster_shift_meanActive: 300
-  cluster_npoint_thre: 10
+  cluster_npoint_thre: 30
 
-  prepare_epochs: 7
+  prepare_epochs: 3
 
 TEST:
   split: val
   test_epoch: 25
-  test_workers: 16
+  test_workers: 4
   test_seed: 567
 
   TEST_NMS_THRESH: 0.3
   TEST_SCORE_THRESH: 0.09
-  TEST_NPOINT_THRESH: 20
+  TEST_NPOINT_THRESH: 40
 
   eval: True
   save_semantic: False

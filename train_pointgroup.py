@@ -276,4 +276,3 @@ if __name__ == '__main__':
 
         if utils.is_multiple(epoch, cfg.save_freq,) or utils.is_power2(epoch):
             eval_epoch(dataset.val_data_loader, model, epoch, dataset)
-            #pass

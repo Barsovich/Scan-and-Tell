@@ -48,11 +48,11 @@ def select_target(data_dict,backbone='votenet'):
         target_instance_labels = data_dict['target_instance_labels']
         target_instance_pointnum = data_dict['target_instance_pointnum']
 
-        ious = pointgroup_ops.get_iou(proposals_idx[:, 1].cuda(), proposals_offset.cuda(),
-            target_instance_labels, target_instance_pointnum) # shape: [num_proposals, batch_size]
-
-        target_ious, target_ids = ious.max(0)
-
+        # ious = pointgroup_ops.get_iou(proposals_idx[:, 1].cuda(), proposals_offset.cuda(),
+        #                               target_instance_labels, target_instance_pointnum) # shape: [num_proposals, batch_size]
+        ious_ = pointgroup_ops.get_iou(proposals_idx[:, 1].cuda(), proposals_offset.cuda(), data_dict['instance_labels'],
+                                      data_dict['instance_pointnum'])
+        target_ious, target_ids = ious_[:, target_instance_labels.unique()[1:]].max(0)
 
     return target_ids, target_ious
 
@@ -379,7 +379,6 @@ class SceneCaptionModule(nn.Module):
                 outputs.append(prop_outputs)
 
             outputs = torch.cat(outputs,dim=0) # num_proposals, num_words - 1/max_len, num_vocabs
-
 
         # store
         data_dict["lang_cap"] = outputs

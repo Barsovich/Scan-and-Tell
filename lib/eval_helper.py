@@ -16,6 +16,7 @@ from tqdm import tqdm
 from copy import deepcopy
 from torch.utils.data import DataLoader
 from numpy.linalg import inv
+from lib.pointgroup_ops.functions import pointgroup_ops
 
 sys.path.append(os.path.join(os.getcwd())) # HACK add the root folder
 
@@ -32,6 +33,7 @@ from lib.loss import SoftmaxRankingLoss
 from utils.box_util import box3d_iou, box3d_iou_batch_tensor
 import utils.utils_pointgroup as utils_pointgroup
 from lib.loss_helper import get_scene_cap_loss, get_pointgroup_cap_loss
+import utils.pointgroup.eval as pg_eval
 
 # constants
 DC = ScannetDatasetConfig()
@@ -321,7 +323,17 @@ def update_interm(interm, candidates, bleu, cider, rouge, meteor):
 
     return interm
 
-
+def non_max_suppression(ious, scores, threshold):
+    ixs = scores.argsort()[::-1]
+    pick = []
+    while len(ixs) > 0:
+        i = ixs[0]
+        pick.append(i)
+        iou = ious[i, ixs[1:]]
+        remove_ixs = np.where(iou > threshold)[0] + 1
+        ixs = np.delete(ixs, remove_ixs)
+        ixs = np.delete(ixs, 0)
+    return np.array(pick, dtype=np.int32)
 
 def eval_cap(model, device, dataset, dataloader, phase, folder, 
     use_tf=False, is_eval=True, max_len=CONF.TRAIN.MAX_DES_LEN, force=False, 
@@ -466,14 +478,74 @@ def feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,no_detection=False):
                 mask = score_mask * npoint_mask
 
                 proposals_pred = proposals_pred[mask]
+                semantic_id = semantic_id[mask]
+                scores_pred = scores_pred[mask]
 
-                import pdb; pdb.set_trace()
+                ##### nms
+                if semantic_id.shape[0] == 0:
+                    pick_idxs = np.empty(0)
+                else:
+                    proposals_pred_f = proposals_pred.float()  # (nProposal, N), float, cuda
+                    intersection = torch.mm(proposals_pred_f, proposals_pred_f.t())  # (nProposal, nProposal), float, cuda
+                    proposals_pointnum = proposals_pred_f.sum(1)  # (nProposal), float, cuda
+                    proposals_pn_h = proposals_pointnum.unsqueeze(-1).repeat(1, proposals_pointnum.shape[0])
+                    proposals_pn_v = proposals_pointnum.unsqueeze(0).repeat(proposals_pointnum.shape[0], 1)
+                    cross_ious = intersection / (proposals_pn_h + proposals_pn_v - intersection)
+                    pick_idxs = non_max_suppression(cross_ious.cpu().numpy(), scores_pred.cpu().numpy(), cfg.TEST_NMS_THRESH)  # int, (nCluster, N)
+                clusters = proposals_pred[pick_idxs]
+                cluster_scores = scores_pred[pick_idxs]
+                cluster_semantic_id = semantic_id[pick_idxs]
 
 
+                instance_labels = data_dict['instance_labels']     # (N), long, cuda, 0~total_nInst, -100
+                instance_pointnum = data_dict['instance_pointnum'] # (total_nInst), int, cuda
 
-    return candidates, meter_dict
+                ious = pointgroup_ops.get_iou(proposals_idx[:, 1].cuda(), proposals_offset.cuda(), instance_labels,
+                                             instance_pointnum)  # (nProposal, nInstance), float
+                gt_ious, gt_instance_idxs = ious.max(1)  # (nProposal) float, long
 
-def eval_cap_pointgroup(model,cfg,epoch,dataset,dataloader,no_detection=False,no_caption=False,force=True):
+                gt_ious = gt_ious[mask][pick_idxs]
+                gt_instance_idxs = gt_instance_idxs[mask][pick_idxs]
+                captions = captions[mask][pick_idxs]
+
+                iou_thresh_mask = gt_ious > 0.25
+                gt_ious = gt_ious[iou_thresh_mask]
+                gt_instance_idxs = gt_instance_idxs[iou_thresh_mask]
+                captions = captions[iou_thresh_mask]
+                # dump generated captions
+                scene_id = dataset.scanrefer[dataset_id]["scene_id"]
+                for prop_id in range(len(gt_ious)):
+                    object_id = str(gt_instance_idxs[prop_id].item())
+                    caption_decoded = decode_caption(captions[prop_id], dataset.vocabulary["idx2word"])
+                    try:
+                        ann_list = list(SCANREFER_ORGANIZED[scene_id][object_id].keys())
+                        object_name = SCANREFER_ORGANIZED[scene_id][object_id][ann_list[0]]["object_name"]
+
+                        # store
+                        key = "{}|{}|{}".format(scene_id, object_id, object_name)
+                        # key = "{}|{}".format(scene_id, object_id)
+                        candidates[key] = [caption_decoded]
+                    except KeyError:
+                        continue
+    return candidates, meter_dict, visual_dict
+
+def process_gt2pred(gt2pred):
+    gt2predlist = []
+    for label, gts in gt2pred.items():
+        for gt in gts:
+            matched_pred_id = -1 if len(gt['matched_pred']) == 0 else gt['matched_pred'][0]['pred_id'] # select the prediction with the highest confidencec
+            gt2predlist.append((gt['instance_id'] % 1000, matched_pred_id))
+    return gt2predlist # [(gt_id, pred_id)]
+
+def process_pred2gt(pred2gt):
+    pred2gt_dict = {}
+    for label, preds in pred2gt.items():
+        for pred in preds:
+            matched_gt_id = -1 if len(pred['matched_gt']) == 0 else pred['matched_gt'][0]['instance_id'] % 1000 # select the prediction with the highest confidencec
+            pred2gt_dict[pred['pred_id']] = matched_gt_id
+    return pred2gt_dict # [(pred_id, gt_id)]
+
+def eval_cap_pointgroup(model,cfg,epoch,dataset,dataloader,no_detection=False,no_caption=False,force=True,max_len=CONF.TRAIN.MAX_DES_LEN):
     am_dict = {}
 
     if no_caption:
@@ -503,7 +575,7 @@ def eval_cap_pointgroup(model,cfg,epoch,dataset,dataloader,no_detection=False,no
                     am_dict[k].update(v[0], v[1])
     else:
 
-        candidates, meter_dict = feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,no_detection)
+        candidates, meter_dict, visual_dict = feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,no_detection)
     
         ##TODO: equivelent steps of feed_scene_cap()
 
@@ -536,15 +608,26 @@ def eval_cap_pointgroup(model,cfg,epoch,dataset,dataloader,no_detection=False,no
             cider = capcider.Cider().compute_score(corpus, candidates)
             rouge = caprouge.Rouge().compute_score(corpus, candidates)
             meteor = capmeteor.Meteor().compute_score(corpus, candidates)
-
-        #decide if captioning metrics should be stored, printed & logged like this or differently
+            print(f"Captioning: BLEU: {bleu}, CIDEr: {cider}, ROUGE: {rouge}, METEOR: {meteor}")
+            visual_dict['bleu'] = bleu
+            visual_dict['cider'] = cider
+            visual_dict['rouge'] = rouge
+            visual_dict['meteor'] = meteor
+            if 'bleu' not in am_dict.keys():
+                am_dict['bleu'] = utils_pointgroup.AverageMeter()
+                am_dict['cider'] = utils_pointgroup.AverageMeter()
+                am_dict['rouge'] = utils_pointgroup.AverageMeter()
+                am_dict['meteor'] = utils_pointgroup.AverageMeter()
+            am_dict['bleu'].update(bleu, 1)
+            am_dict['cider'].update(cider, 1)
+            am_dict['rouge'].update(rouge, 1)
+            am_dict['meteor'].update(meteor, 1)
 
         ##### meter_dict
         for k, v in meter_dict.items():
             if k not in am_dict.keys():
                 am_dict[k] = utils_pointgroup.AverageMeter()
             am_dict[k].update(v[0], v[1])
-
 
     return am_dict, visual_dict
 
