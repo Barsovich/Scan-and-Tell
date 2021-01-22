@@ -34,6 +34,8 @@ from utils.box_util import box3d_iou, box3d_iou_batch_tensor
 import utils.utils_pointgroup as utils_pointgroup
 from lib.loss_helper import get_scene_cap_loss, get_pointgroup_cap_loss
 import utils.pointgroup.eval as pg_eval
+from utils.eval_det import get_iou
+import lib.ap_helper as ap_helper
 
 # constants
 DC = ScannetDatasetConfig()
@@ -431,6 +433,16 @@ def eval_cap(model, device, dataset, dataloader, phase, folder,
     else:
         return bleu, cider, rouge, meteor, cls_acc
 
+def remap_semantic_ids(sematic_ids):
+    semantic_label_idx = [3,4,5,6,7,8,9,10,11,12,14,16,24,28,33,34,36,39]
+    remapper = np.ones(40) * (-100)
+    for i, x in enumerate(semantic_label_idx):
+        remapper[x] = i
+    remapped_labels = np.zeros(sematic_ids.shape)
+    for i, l in enumerate(sematic_ids):
+        remapped_labels[i] = remapper[l]
+    return remapped_labels
+
 def feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,no_detection=False):
 
     semantic_label_idx = [3,4,5,6,7,8,9,10,11,12,14,16,24,28,33,34,36,39]
@@ -440,8 +452,13 @@ def feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,no_detection=False):
     with torch.no_grad():
         #model.eval()
         #start_epoch = time.time()
+        scene_ids = []
         for data_dict in tqdm(dataloader):
-
+            scene_id = data_dict['scene_id']
+            if scene_id not in scene_ids:
+                scene_ids.append(scene_id)
+            else:
+                continue
             #move to cuda 
             for key in data_dict:
                 if type(data_dict[key]) == torch.Tensor:
@@ -499,21 +516,41 @@ def feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,no_detection=False):
 
                 instance_labels = data_dict['instance_labels']     # (N), long, cuda, 0~total_nInst, -100
                 instance_pointnum = data_dict['instance_pointnum'] # (total_nInst), int, cuda
+                coords = data_dict['locs']                          # (N, 1 + 3), long, cuda, dimension 0 for batch_idx
+                labels = data_dict['labels']                      # (N), long, cuda
+                gt_cluster_count = instance_pointnum.shape[0]
 
-                ious = pointgroup_ops.get_iou(proposals_idx[:, 1].cuda(), proposals_offset.cuda(), instance_labels,
-                                             instance_pointnum)  # (nProposal, nInstance), float
-                gt_ious, gt_instance_idxs = ious.max(1)  # (nProposal) float, long
+                # ious = pointgroup_ops.get_iou(proposals_idx[:, 1].cuda(), proposals_offset.cuda(), instance_labels,
+                #                              instance_pointnum)  # (nProposal, nInstance), float
+                # gt_ious, gt_instance_idxs = ious.max(1)  # (nProposal) float, long
 
-                gt_ious = gt_ious[mask][pick_idxs]
-                gt_instance_idxs = gt_instance_idxs[mask][pick_idxs]
+                remapped_semantic_ids = remap_semantic_ids(cluster_semantic_id)
+                pred_bboxes = ap_helper.calculate_pred_bboxes_pointgroup(coords, clusters, remapped_semantic_ids, cluster_scores)[0]
+                gt_bboxes = ap_helper.calculate_gt_bboxes_pointgroup(coords, labels, instance_labels, gt_cluster_count)[0]
+
+                # [
+                #     semantic_class -> (float),
+                #     bbox -> ([center_x, center_y, center_z, length_x, length_y, length_z]),
+                #     bbox_score -> (float, [0 - 1])
+                # ]
+                ious_bbox = torch.zeros(len(pred_bboxes), len(gt_bboxes)).cuda()
+                for i, pred_box_info in enumerate(pred_bboxes):
+                    for j, gt_box_info in enumerate(gt_bboxes):
+                        pred_bbox = np.array(pred_box_info[1])
+                        gt_bbox = np.array(gt_box_info[1])
+                        ious_bbox[i, j] = get_iou(pred_bbox, gt_bbox)
+                gt_ious, gt_instance_idxs = ious_bbox.max(1)  # (nProposal) float, long
+
+                # gt_ious = gt_ious[mask][pick_idxs]
+                # gt_instance_idxs = gt_instance_idxs[mask][pick_idxs]
                 captions = captions[mask][pick_idxs]
 
-                iou_thresh_mask = gt_ious > 0.25
+                iou_thresh_mask = gt_ious > 0.5
                 gt_ious = gt_ious[iou_thresh_mask]
                 gt_instance_idxs = gt_instance_idxs[iou_thresh_mask]
                 captions = captions[iou_thresh_mask]
                 # dump generated captions
-                scene_id = dataset.scanrefer[dataset_id]["scene_id"]
+                scene_id = dataset.val_data[dataset_id]["scene_id"]
                 for prop_id in range(len(gt_ious)):
                     object_id = str(gt_instance_idxs[prop_id].item())
                     caption_decoded = decode_caption(captions[prop_id], dataset.vocabulary["idx2word"])
@@ -576,7 +613,6 @@ def eval_cap_pointgroup(model,cfg,epoch,dataset,dataloader,no_detection=False,no
     else:
 
         candidates, meter_dict, visual_dict = feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,no_detection)
-    
         ##TODO: equivelent steps of feed_scene_cap()
 
         if epoch > cfg.prepare_epochs:
@@ -621,7 +657,7 @@ def eval_cap_pointgroup(model,cfg,epoch,dataset,dataloader,no_detection=False,no
             am_dict['cider'].update(cider[0], 1)
             am_dict['rouge'].update(rouge[0], 1)
             am_dict['meteor'].update(meteor[0], 1)
-
+            import pdb; pdb.set_trace()
         ##### meter_dict
         for k, v in meter_dict.items():
             if k not in am_dict.keys():

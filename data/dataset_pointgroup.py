@@ -462,6 +462,7 @@ class Dataset:
         object_classes = []
 
         batch_offsets = [0]
+        scene_ids = []
 
         total_inst_num = 0
         for i, idx in enumerate(id):
@@ -507,6 +508,7 @@ class Dataset:
             total_inst_num += inst_num
 
             ### merge the scene to the batch
+            scene_ids.append(scene_id)
             ann_ids.append(int(ann_id))
             object_ids.append(int(object_id))
             batch_offsets.append(batch_offsets[-1] + xyz.shape[0])
@@ -560,7 +562,7 @@ class Dataset:
                 'instance_info': instance_infos, 'instance_pointnum': instance_pointnum,
                 'id': id, 'offsets': batch_offsets, 'spatial_shape': spatial_shape, 
                 'lang_feat': lang_feats, 'lang_len': lang_lens, 'lang_ids': lang_ids, 
-                'ann_id': ann_ids, 'object_id': object_ids }
+                'ann_id': ann_ids, 'object_id': object_ids, 'scene_id': scene_ids}
 
 
     def testMerge(self, id):
