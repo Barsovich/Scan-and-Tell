@@ -15,7 +15,7 @@ semantic_label_names = ['cabinet','bed','chair','sofa','table','door','window','
 if __name__ == '__main__':
     split = 'val'
     dataset = 'scannet_data'
-    test_scan_names = sorted([line.rstrip() for line in open(os.path.join('meta_data/scannetv2_test.txt'))])
+    test_scan_names = sorted([line.rstrip() for line in open(os.path.join('meta_data/scannetv2_val.txt'))])
     files = list(map(lambda name: os.path.join(dataset,'{}_pointgroup.pth'.format(name)), test_scan_names))
     rooms = [torch.load(i) for i in files]
 

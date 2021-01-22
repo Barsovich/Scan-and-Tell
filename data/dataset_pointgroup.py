@@ -76,7 +76,7 @@ class Dataset:
     def valLoader(self):
         self.val_file_names = sorted(list(set([data["scene_id"] for data in self.val_data])))
         #self.val_file_names = list(map(lambda data: os.path.join(self.data_root,self.dataset,'{}_pointgroup.pth'.format(data[' scene_id'])),val_file_names))
-        #val_file_names = sorted(glob.glob(os.path.join(self.data_root, self.dataset, 'val', '*' + self.filename_suffix)))
+        # val_file_names = sorted(glob.glob(os.path.join(self.data_root, self.dataset, 'val', '*' + self.filename_suffix)))
         #self.val_files = [torch.load(i) for i in val_file_names]
 
         logger.info('Validation on {} object samples from {} scenes.'.format(len(self.val_data),len(self.val_file_names)))
@@ -465,12 +465,11 @@ class Dataset:
 
         total_inst_num = 0
         for i, idx in enumerate(id):
-
-            #get object 
-            scene_id = self.train_data[idx]["scene_id"]
-            object_id = int(self.train_data[idx]["object_id"])
-            object_name = " ".join(self.train_data[idx]["object_name"].split("_"))
-            ann_id = self.train_data[idx]["ann_id"]
+            #get object
+            scene_id = self.val_data[idx]["scene_id"]
+            object_id = int(self.val_data[idx]["object_id"])
+            object_name = " ".join(self.val_data[idx]["object_name"].split("_"))
+            ann_id = self.val_data[idx]["ann_id"]
 
             #get language features
             lang_feat = self.lang[scene_id][str(object_id)][ann_id]
@@ -489,15 +488,15 @@ class Dataset:
 
             ### offset
             xyz -= xyz.min(0)
-
-            ### crop
-            xyz, valid_idxs = random_sampling(xyz, self.max_npoint, return_choices=True)
-
-            xyz_middle = xyz_middle[valid_idxs]
-            # xyz = xyz[valid_idxs]
-            rgb = rgb[valid_idxs]
-            label = label[valid_idxs]
-            instance_label = self.getCroppedInstLabel(instance_label, valid_idxs)
+            #
+            # ### crop
+            # xyz, valid_idxs = random_sampling(xyz, self.max_npoint, return_choices=True)
+            #
+            # xyz_middle = xyz_middle[valid_idxs]
+            # # xyz = xyz[valid_idxs]
+            # rgb = rgb[valid_idxs]
+            # label = label[valid_idxs]
+            # instance_label = self.getCroppedInstLabel(instance_label, valid_idxs)
 
             ### get instance information
             inst_num, inst_infos, _ = self.getInstanceInfo(xyz_middle, instance_label.astype(np.int32),object_id)
@@ -517,7 +516,7 @@ class Dataset:
 
             feat = torch.from_numpy(rgb) 
             if self.use_multiview:
-                multiview = torch.from_numpy(self.multiview_data[scene_id][:])[valid_idxs]
+                multiview = torch.from_numpy(self.multiview_data[scene_id][:])
                 feat = torch.cat([feat,multiview],1)
 
             feats.append(feat)

@@ -527,7 +527,6 @@ def feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,no_detection=False):
                         candidates[key] = [caption_decoded]
                     except KeyError:
                         continue
-            break
     return candidates, meter_dict, visual_dict
 
 def process_gt2pred(gt2pred):

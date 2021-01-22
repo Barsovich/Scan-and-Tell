@@ -98,7 +98,7 @@ def get_scanrefer(scanrefer_train, scanrefer_val, num_scenes):
     return new_scanrefer_train, new_scanrefer_val, all_scene_list
 
 
-def test(model, dataloader, epoch):
+def test(model, dataloader, epoch, val_scene_list):
     logger.info('>>>>>>>>>>>>>>>> Start Evaluation >>>>>>>>>>>>>>>>')
 
     # scanrefer_train, scanrefer_val, all_scene_list = get_scanrefer(SCANREFER_TRAIN, SCANREFER_VAL, -1)
@@ -135,11 +135,11 @@ def test(model, dataloader, epoch):
                 else:
                     pass
 
-            N = batch['feats'].shape[0]
+            N = data_dict['feats'].shape[0]
             #test_scene_name = dataset.val_file_names[int(batch['id'][0])].split('/')[-1][:12]
-            test_scene_name = dataset.val_data[data_dict['id'][0]]['scene_id']
+            test_scene_name = val_scene_list[data_dict['id'][0]]
             start1 = time.time()
-            data_dict = model(data_dict, epoch)
+            data_dict = model(data_dict, epoch, is_eval=True)
             end1 = time.time() - start1
 
             ##### get predictions (#1 semantic_pred, pt_offsets; #2 scores, proposals_pred)
@@ -228,7 +228,7 @@ def test(model, dataloader, epoch):
             if cfg.save_pt_offsets:
                 os.makedirs(os.path.join(result_dir, 'coords_offsets'), exist_ok=True)
                 pt_offsets_np = pt_offsets.cpu().numpy()
-                coords_np = batch['locs_float'].numpy()
+                coords_np = data_dict['locs_float'].numpy()
                 coords_offsets = np.concatenate((coords_np, pt_offsets_np), 1)   # (N, 6)
                 np.save(os.path.join(result_dir, 'coords_offsets', test_scene_name + '.npy'), coords_offsets)
 
@@ -249,7 +249,7 @@ def test(model, dataloader, epoch):
             start = time.time()
 
             ##### print
-            logger.info("instance iter: {}/{} point_num: {} ncluster: {} time: total {:.2f}s inference {:.2f}s save {:.2f}s".format(batch['id'][0] + 1, len(dataset.val_file_names), N, nclusters, end, end1, end3))
+            logger.info("instance iter: {}/{} point_num: {} ncluster: {} time: total {:.2f}s inference {:.2f}s save {:.2f}s".format(data_dict['id'][0] + 1, len(dataset.val_file_names), N, nclusters, end, end1, end3))
 
         ##### evaluation
         if cfg.eval:
@@ -316,8 +316,9 @@ if __name__ == '__main__':
     dataloader = dataset.val_data_loader
     vocabulary = dataset.vocabulary
     embeddings = dataset.glove
+    val_scene_list = all_scene_list[-312:]
 
-    model = CapNet(vocabulary, embeddings, cfg, 'pointgroup',no_caption=cfg.no_caption,prepare_epochs=cfg.prepare_epochs)
+    model = CapNet(vocabulary, embeddings, cfg, 'pointgroup',no_caption=False,prepare_epochs=cfg.prepare_epochs)
 
     use_cuda = torch.cuda.is_available()
     logger.info('cuda available: {}'.format(use_cuda))
@@ -334,4 +335,4 @@ if __name__ == '__main__':
     utils.checkpoint_restore(model, cfg.exp_path, cfg.config.split('/')[-1][:-5], use_cuda, cfg.test_epoch, dist=False, f=cfg.pretrain)      # resume from the latest epoch, or specify the epoch to restore
 
     ##### evaluate
-    test(model, dataloader, cfg.test_epoch)
+    test(model, dataloader, cfg.test_epoch, val_scene_list)
