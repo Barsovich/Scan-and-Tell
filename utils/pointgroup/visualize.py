@@ -150,8 +150,8 @@ def remap_predicted_labels_back(predicted_labels):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_root', help='path to the input dataset files', default='../../data/scannet/scannet_data')
-    parser.add_argument('--result_root', help='path to the predicted results', default='../../exp/scannet_data/pointgroup/pointgroup_run1_scannet/result/epoch384_nmst0.3_scoret0.09_npointt100')
-    parser.add_argument('--room_name', help='room_name', default='scene0011_00')
+    parser.add_argument('--result_root', help='path to the predicted results', default='../../exp/scannet_data/pointgroup/pointgroup_run10_scannet/result/epoch7_nmst0.3_scoret0.09_npointt40')
+    parser.add_argument('--room_name', help='room_name', default='scene0153_00')
     parser.add_argument('--room_split', help='train / val / test', default='val')
     parser.add_argument('--task', help='input / semantic_gt / semantic_pred / instance_gt / instance_pred', default='input')
     opt = parser.parse_args()
