@@ -15,96 +15,147 @@ from tqdm import tqdm
 from copy import deepcopy
 
 sys.path.append(os.path.join(os.getcwd())) # HACK add the root folder
+
+import lib.capeval.bleu.bleu as capblue
+import lib.capeval.cider.cider as capcider
+import lib.capeval.rouge.rouge as caprouge
+
+from data.scannet.model_util_scannet import ScannetDatasetConfig
 from config.config_votenet import CONF
+from config.config_pointgroup import cfg as args
 from data.dataset_votenet import ScannetReferenceDataset
 from lib.solver import Solver
 from lib.ap_helper import APCalculator, parse_predictions, parse_groundtruths
-from lib.loss_helper import get_loss
-from lib.eval_helper import get_eval
-from models.votenet import RefNet
-from data.scannet.model_util_scannet import ScannetDatasetConfig
+from lib.loss_helper import get_scene_cap_loss
+from lib.eval_helper import eval_cap
+from models.capnet import CapNet
+
 
 SCANREFER_TRAIN = json.load(open(os.path.join(CONF.PATH.DATA, "ScanRefer_filtered_train.json")))
 SCANREFER_VAL = json.load(open(os.path.join(CONF.PATH.DATA, "ScanRefer_filtered_val.json")))
 
-def get_dataloader(args, scanrefer, all_scene_list, split, config):
+# constant
+DC = ScannetDatasetConfig()
+
+def get_dataloader(args, scanrefer, all_scene_list, config):
     dataset = ScannetReferenceDataset(
         scanrefer=scanrefer, 
-        scanrefer_all_scene=all_scene_list, 
-        split=split, 
+        scanrefer_all_scene=all_scene_list,  
         num_points=args.num_points, 
-        use_color=args.use_color, 
         use_height=(not args.no_height),
+        use_color=args.use_color, 
         use_normal=args.use_normal, 
-        use_multiview=args.use_multiview
+        use_multiview=args.use_multiview,
+        augment=False
     )
-    print("evaluate on {} samples".format(len(dataset)))
-
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
+    # dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     return dataset, dataloader
 
-def get_model(args, config):
-    # load model
+def get_model(args, dataset, device, root=CONF.PATH.OUTPUT):
+    # initiate model
     input_channels = int(args.use_multiview) * 128 + int(args.use_normal) * 3 + int(args.use_color) * 3 + int(not args.no_height)
-    model = RefNet(
-        num_class=config.num_class,
-        num_heading_bin=config.num_heading_bin,
-        num_size_cluster=config.num_size_cluster,
-        mean_size_arr=config.mean_size_arr,
-        num_proposal=args.num_proposals,
+    model = CapNet(
+        num_class=DC.num_class,
+        vocabulary=dataset.vocabulary,
+        embeddings=dataset.glove,
+        num_heading_bin=DC.num_heading_bin,
+        num_size_cluster=DC.num_size_cluster,
+        mean_size_arr=DC.mean_size_arr,
         input_feature_dim=input_channels,
-        use_bidir=args.use_bidir
-    ).cuda()
+        num_proposal=args.num_proposals,
+        no_caption=not args.eval_caption,
+        use_topdown=args.use_topdown,
+        num_locals=args.num_locals,
+        query_mode=args.query_mode,
+        graph_mode=args.graph_mode,
+        num_graph_steps=args.num_graph_steps,
+        use_relation=args.use_relation
+    )
 
-    model_name = "model_last.pth" if args.detection else "model.pth"
-    path = os.path.join(CONF.PATH.OUTPUT, args.folder, model_name)
-    model.load_state_dict(torch.load(path), strict=False)
+    # load
+    model_name = "model_last.pth" if args.use_last else "model.pth"
+    model_path = os.path.join(root, args.folder, model_name)
+    model.load_state_dict(torch.load(model_path), strict=False)
+    # model.load_state_dict(torch.load(model_path))
+
+    # multi-GPU
+    if torch.cuda.device_count() > 1:
+        print("using {} GPUs...".format(torch.cuda.device_count()))
+        model = torch.nn.DataParallel(model)
+    
+    # to device
+    model.to(device)
+
+    # set mode
     model.eval()
 
     return model
 
 def get_scannet_scene_list(split):
-    scene_list = sorted([line.rstrip() for line in open(os.path.join(CONF.PATH.SCANNET_META, "scannetv2_{}.txt".format(split)))])
+    scene_list = sorted([line.rstrip() for line in open(os.path.join(CONF.PATH.DATA, "ScanRefer_filtered_{}.txt".format(split)))])
 
     return scene_list
 
-def get_scanrefer(args):
-    if args.detection:
-        scene_list = get_scannet_scene_list("val")
-        scanrefer = []
-        for scene_id in scene_list:
-            data = deepcopy(SCANREFER_TRAIN[0])
-            data["scene_id"] = scene_id
-            scanrefer.append(data)
-    else:
-        scanrefer = SCANREFER_TRAIN if args.use_train else SCANREFER_VAL
-        scene_list = sorted(list(set([data["scene_id"] for data in scanrefer])))
-        if args.num_scenes != -1:
-            scene_list = scene_list[:args.num_scenes]
+def get_eval_data(args):
+    eval_scene_list = get_scannet_scene_list("train") if args.use_train else get_scannet_scene_list("val")
+    scanrefer_eval = []
+    for scene_id in eval_scene_list:
+        data = deepcopy(SCANREFER_TRAIN[0]) if args.use_train else deepcopy(SCANREFER_VAL[0])
+        data["scene_id"] = scene_id
+        scanrefer_eval.append(data)
 
-        scanrefer = [data for data in scanrefer if data["scene_id"] in scene_list]
+    print("eval on {} samples".format(len(scanrefer_eval)))
 
-    return scanrefer, scene_list
+    return scanrefer_eval, eval_scene_list
 
-def eval_cap(args):
-    print('Not implemented yet. Exiting...')
-    exit(0)
+def eval_caption(args):
+    print("initializing...")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-def eval_det(args):
+    # get eval data
+    scanrefer_eval, eval_scene_list = get_eval_data(args)
+
+    # get dataloader
+    dataset, dataloader = get_dataloader(args, scanrefer_eval, eval_scene_list, DC)
+
+    # get model
+    model = get_model(args, dataset, device)
+
+    # evaluate
+    bleu, cider, rouge, meteor = eval_cap(model, device, dataset, dataloader, "val", args.folder, args.use_tf, 
+        force=args.force, save_interm=args.save_interm, min_iou=args.min_iou)
+
+    # report
+    print("\n----------------------Evaluation-----------------------")
+    print("[BLEU-1] Mean: {:.4f}, Max: {:.4f}, Min: {:.4f}".format(bleu[0][0], max(bleu[1][0]), min(bleu[1][0])))
+    print("[BLEU-2] Mean: {:.4f}, Max: {:.4f}, Min: {:.4f}".format(bleu[0][1], max(bleu[1][1]), min(bleu[1][1])))
+    print("[BLEU-3] Mean: {:.4f}, Max: {:.4f}, Min: {:.4f}".format(bleu[0][2], max(bleu[1][2]), min(bleu[1][2])))
+    print("[BLEU-4] Mean: {:.4f}, Max: {:.4f}, Min: {:.4f}".format(bleu[0][3], max(bleu[1][3]), min(bleu[1][3])))
+    print("[CIDEr] Mean: {:.4f}, Max: {:.4f}, Min: {:.4f}".format(cider[0], max(cider[1]), min(cider[1])))
+    print("[ROUGE-L] Mean: {:.4f}, Max: {:.4f}, Min: {:.4f}".format(rouge[0], max(rouge[1]), min(rouge[1])))
+    print("[METEOR] Mean: {:.4f}, Max: {:.4f}, Min: {:.4f}".format(meteor[0], max(meteor[1]), min(meteor[1])))
+    print()
+
+def eval_detection(args):
     print("evaluate detection...")
     # constant
     DC = ScannetDatasetConfig()
     
     # init training dataset
     print("preparing data...")
-    scanrefer, scene_list = get_scanrefer(args)
+    # get eval data
+    scanrefer_eval, eval_scene_list = get_eval_data(args)
 
-    # dataloader
-    _, dataloader = get_dataloader(args, scanrefer, scene_list, "val", DC)
+    # get dataloader
+    dataset, dataloader = get_dataloader(args, scanrefer_eval, eval_scene_list, DC)
 
     # model
-    model = get_model(args, DC)
+    print("initializing...")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    root = CONF.PATH.PRETRAINED if args.eval_pretrained else CONF.PATH.OUTPUT
+    model = get_model(args, dataset, device, root)
 
     # config
     POST_DICT = {
@@ -127,21 +178,8 @@ def eval_det(args):
 
         # feed
         with torch.no_grad():
-            data = model(data)
-            _, data = get_loss(
-                data_dict=data, 
-                config=DC, 
-                detection=True,
-                caption=False
-            )
-            data = get_eval(
-                data_dict=data, 
-                config=DC, 
-                caption=False,
-                post_processing=POST_DICT
-            )
-
-        sem_acc.append(data["sem_acc"].item())
+            data = model(data, use_tf=False, is_eval=True)
+            data = get_scene_cap_loss(data, device, DC, weights=dataset.weights, detection=True, caption=False)
 
         batch_pred_map_cls = parse_predictions(data, POST_DICT) 
         batch_gt_map_cls = parse_groundtruths(data, POST_DICT) 
@@ -149,7 +187,6 @@ def eval_det(args):
             ap_calculator.step(batch_pred_map_cls, batch_gt_map_cls)
 
     # aggregate object detection results and report
-    print("\nobject detection sem_acc: {}".format(np.mean(sem_acc)))
     for i, ap_calculator in enumerate(AP_CALCULATOR_LIST):
         print()
         print("-"*10, "iou_thresh: %f"%(AP_IOU_THRESHOLDS[i]), "-"*10)
@@ -157,37 +194,44 @@ def eval_det(args):
         for key in metrics_dict:
             print("eval %s: %f"%(key, metrics_dict[key]))
 
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--folder", type=str, help="Folder containing the model")
-    parser.add_argument("--gpu", type=str, help="gpu", default="0")
-    parser.add_argument("--batch_size", type=int, help="batch size", default=8)
-    parser.add_argument("--num_points", type=int, default=40000, help="Point Number [default: 40000]")
-    parser.add_argument("--num_proposals", type=int, default=256, help="Proposal number [default: 256]")
-    parser.add_argument("--num_scenes", type=int, default=-1, help="Number of scenes [default: -1]")
-    parser.add_argument("--force", action="store_true", help="enforce the generation of results")
-    parser.add_argument("--seed", type=int, default=42, help="random seed")
-    parser.add_argument("--repeat", type=int, default=1, help="Number of times for evaluation")
-    parser.add_argument("--no_height", action="store_true", help="Do NOT use height signal in input.")
-    parser.add_argument("--no_lang_cls", action="store_true", help="Do NOT use language classifier.")
-    parser.add_argument("--no_nms", action="store_true", help="do NOT use non-maximum suppression for post-processing.")
-    parser.add_argument("--use_color", action="store_true", help="Use RGB color in input.")
-    parser.add_argument("--use_normal", action="store_true", help="Use RGB color in input.")
-    parser.add_argument("--use_multiview", action="store_true", help="Use multiview images.")
-    parser.add_argument("--use_bidir", action="store_true", help="Use bi-directional GRU.")
-    parser.add_argument("--use_train", action="store_true", help="Use train split in evaluation.")
-    parser.add_argument("--use_oracle", action="store_true", help="Use ground truth bounding boxes.")
-    parser.add_argument("--use_cat_rand", action="store_true", help="Use randomly selected bounding boxes from correct categories as outputs.")
-    parser.add_argument("--use_best", action="store_true", help="Use best bounding boxes as outputs.")
-    parser.add_argument("--caption", action="store_true", help="evaluate the captioning results")
-    parser.add_argument("--detection", action="store_true", help="evaluate the object detection results")
-    args = parser.parse_args()
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("--folder", type=str, help="Folder containing the model")
+    # parser.add_argument("--gpu", type=str, help="gpu", default="0")
+    # parser.add_argument("--batch_size", type=int, help="batch size", default=8)
+    # parser.add_argument("--num_points", type=int, default=40000, help="Point Number [default: 40000]")
+    # parser.add_argument("--num_proposals", type=int, default=256, help="Proposal number [default: 256]")
+    # parser.add_argument("--num_scenes", type=int, default=-1, help="Number of scenes [default: -1]")
+    # parser.add_argument("--force", action="store_true", help="enforce the generation of results")
+    # parser.add_argument("--seed", type=int, default=42, help="random seed")
+    # parser.add_argument("--repeat", type=int, default=1, help="Number of times for evaluation")
+    # parser.add_argument("--no_height", action="store_true", help="Do NOT use height signal in input.")
+    # parser.add_argument("--no_lang_cls", action="store_true", help="Do NOT use language classifier.")
+    # parser.add_argument("--no_nms", action="store_true", help="do NOT use non-maximum suppression for post-processing.")
+    # parser.add_argument("--use_color", action="store_true", help="Use RGB color in input.")
+    # parser.add_argument("--use_normal", action="store_true", help="Use RGB color in input.")
+    # parser.add_argument("--use_multiview", action="store_true", help="Use multiview images.")
+    # parser.add_argument("--use_bidir", action="store_true", help="Use bi-directional GRU.")
+    # parser.add_argument("--use_train", action="store_true", help="Use train split in evaluation.")
+    # parser.add_argument("--use_oracle", action="store_true", help="Use ground truth bounding boxes.")
+    # parser.add_argument("--use_cat_rand", action="store_true", help="Use randomly selected bounding boxes from correct categories as outputs.")
+    # parser.add_argument("--use_best", action="store_true", help="Use best bounding boxes as outputs.")
+    # parser.add_argument("--caption", action="store_true", help="evaluate the captioning results")
+    # parser.add_argument("--detection", action="store_true", help="evaluate the object detection results")
+    # args = parser.parse_args()
 
     # setting
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
     os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
+     # reproducibility
+    torch.manual_seed(args.seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    np.random.seed(args.seed)
+
     # evaluate
-    if args.caption: eval_cap(args)
-    if args.detection: eval_det(args)
+    if args.eval_caption: eval_caption(args)
+    if args.eval_detection: eval_detection(args)
 

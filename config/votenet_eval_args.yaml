@@ -1,0 +1,41 @@
+ARGS:
+  dataset: scannet
+  model_name: votenet
+  task: eval
+
+  folder: 
+  gpu: 0
+  batch_size: 8
+  
+  num_points: 40000
+  num_proposals: 256
+  num_locals: -1
+  num_scenes: -1
+
+  num_graph_steps: 0
+  seed: 42
+  criterion: cider #[choices: bleu-1, bleu-2, bleu-3, bleu-4, cider, rouge, meteor, sum]
+
+  query_mode: center
+  graph_mode: edge_conv
+  graph_aggr: add
+  
+  min_iou: 0.5
+
+  no_height: False
+  no_augment: False
+  use_tf: True
+  use_color: True
+  use_normal: False
+  use_multiview: True
+  use_topdown: False
+  use_relation: False
+  use_last: False
+  use_orientation: False
+  use_distance: False
+
+  eval_caption: False
+  eval_detection: True
+  eval_pretrained: False
+  use_train: False
+  force: True
