@@ -1,8 +1,8 @@
-""" 
 
-Usage example: python ./batch_load_scannet_data.py
-"""
+'''
+    Modified from: https://github.com/daveredrum/ScanRefer/blob/master/data/scannet/batch_load_scannet_data.py
 
+'''
 import os
 import sys
 import datetime

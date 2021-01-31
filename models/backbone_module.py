@@ -1,3 +1,8 @@
+'''
+    Modified from: https://github.com/daveredrum/ScanRefer/blob/master/models/backbone_module.py
+
+'''
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

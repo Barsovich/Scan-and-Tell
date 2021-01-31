@@ -1,3 +1,9 @@
+
+'''
+    Modified from: https://github.com/daveredrum/ScanRefer/blob/master/lib/loss_helper.py
+
+'''
+
 # Copyright (c) Facebook, Inc. and its affiliates.
 # 
 # This source code is licensed under the MIT license found in the

@@ -1,3 +1,9 @@
+'''
+    Modified from: https://github.com/daveredrum/ScanRefer/blob/master/scripts/project_multiview_labels.py
+
+'''
+
+
 import os
 import sys
 import h5py

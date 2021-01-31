@@ -1,3 +1,8 @@
+'''
+    Modified from: https://github.com/daveredrum/ScanRefer/blob/master/scripts/train.py
+
+'''
+
 import os
 import sys
 import json

@@ -1,3 +1,8 @@
+'''
+    Modified from: https://github.com/daveredrum/ScanRefer/blob/master/scripts/project_multiview_features.py
+
+'''
+
 import os
 import sys
 import h5py
