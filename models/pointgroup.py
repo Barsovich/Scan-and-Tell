@@ -1,6 +1,6 @@
 '''
 PointGroup
-Adapted from https://github.com/Jia-Research-Lab/PointGroup/blob/master/model/pointgroup/pointgroup.py written by Li Jiang
+Adapted from https://github.com/Jia-Research-Lab/PointGroup/blob/master/model/pointgroup/pointgroup.py
 '''
 
 import torch

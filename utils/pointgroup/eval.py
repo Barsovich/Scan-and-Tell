@@ -1,3 +1,6 @@
+'''
+Adapted from https://github.com/Jia-Research-Lab/PointGroup/blob/master/util/eval.py
+'''
 # Modified from ScanNet evaluation script: https://github.com/ScanNet/ScanNet/blob/master/BenchmarkScripts/3d_evaluation/evaluate_semantic_instance.py
 
 import os, sys, numpy as np

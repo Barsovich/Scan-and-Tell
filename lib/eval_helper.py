@@ -649,7 +649,6 @@ def eval_cap_pointgroup(model,cfg,epoch,dataset,dataloader,no_detection=False,no
             am_dict['cider'].update(cider[0], 1)
             am_dict['rouge'].update(rouge[0], 1)
             am_dict['meteor'].update(meteor[0], 1)
-            import pdb; pdb.set_trace()
         ##### meter_dict
         for k, v in meter_dict.items():
             if k not in am_dict.keys():

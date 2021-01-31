@@ -1,6 +1,6 @@
 '''
 PointGroup test.py
-Written by Li Jiang
+Adapted from https://github.com/Jia-Research-Lab/PointGroup/blob/master/test.py
 '''
 
 import torch
@@ -17,6 +17,7 @@ import utils.pointgroup.eval as eval
 import lib.ap_helper as ap_helper
 from copy import deepcopy
 import json
+from lib.eval_helper import eval_cap_pointgroup
 SCANREFER_TRAIN = json.load(open(os.path.join('data', "ScanRefer_filtered_train.json")))
 SCANREFER_VAL = json.load(open(os.path.join('data', "ScanRefer_filtered_val.json")))
 
@@ -51,7 +52,7 @@ def init():
     torch.cuda.manual_seed_all(cfg.test_seed)
 
 def get_scannet_scene_list(split):
-    scene_list = sorted([line.rstrip() for line in open(os.path.join(cfg.data_root,'meta_data', "scannetv2_{}.txt".format(split)))])
+    scene_list = sorted([line.rstrip() for line in open(os.path.join("data", "ScanRefer_filtered_{}.txt".format(split)))])
 
     return scene_list
 
@@ -59,7 +60,7 @@ def get_eval_data(cfg):
     eval_scene_list = get_scannet_scene_list("train") if cfg.use_train else get_scannet_scene_list("val")
     scanrefer_eval = []
     for scene_id in eval_scene_list:
-        data = deepcopy(SCANREFER_TRAIN[0]) if args.use_train else deepcopy(SCANREFER_VAL[0])
+        data = deepcopy(SCANREFER_TRAIN[0]) if cfg.use_train else deepcopy(SCANREFER_VAL[0])
         data["scene_id"] = scene_id
         scanrefer_eval.append(data)
 
@@ -249,7 +250,7 @@ def non_max_suppression(ious, scores, threshold):
 
 def test_caption(model, dataloader, epoch, val_scene_list):
 
-    bleu,cider,rouge,meteor = eval_cap_pointgroup(model,cfg,epoch,dataset,val_loader,
+    bleu,cider,rouge,meteor = eval_cap_pointgroup(model,cfg,epoch,dataset,dataloader,
         no_detection=False,no_caption=False,force=True,min_iou=cfg.TEST_MIN_IOU,task='eval')
 
     # report
