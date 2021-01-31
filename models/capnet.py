@@ -5,9 +5,9 @@ import sys
 import os
 
 sys.path.append(os.path.join(os.getcwd())) # HACK add the root folder
-from models.backbone_module import Pointnet2Backbone
+# from models.backbone_module import Pointnet2Backbone
 from models.voting_module import VotingModule
-from models.proposal_module import ProposalModule
+# from models.proposal_module import ProposalModule
 from models.pointgroup import PointGroup
 from models.graph_module import GraphModule
 from models.captioning_module import PlainCapModule, AttentionCapModule, SceneCaptionModule
@@ -33,13 +33,13 @@ class VoteNetBackbone(nn.Module):
 
         # --------- PROPOSAL GENERATION ---------
         # Backbone point feature learning
-        self.backbone_net = Pointnet2Backbone(input_feature_dim=self.input_feature_dim)
+        # self.backbone_net = Pointnet2Backbone(input_feature_dim=self.input_feature_dim)
 
         # Hough voting
         self.vgen = VotingModule(self.vote_factor, 256)
 
         # Vote aggregation and object proposal
-        self.proposal = ProposalModule(num_class, num_heading_bin, num_size_cluster, mean_size_arr, num_proposal, sampling)
+        # self.proposal = ProposalModule(num_class, num_heading_bin, num_size_cluster, mean_size_arr, num_proposal, sampling)
 
     def forward(self,data_dict,epoch=None):
 
@@ -71,7 +71,7 @@ class CapNet(nn.Module):
     num_heading_bin = DC.num_heading_bin, num_size_cluster = DC.num_size_cluster, mean_size_arr = DC.mean_size_arr, 
     input_feature_dim=0, num_proposal=256, num_locals=-1, vote_factor=1, sampling="vote_fps",
     no_caption=True, use_topdown=False, query_mode="corner", 
-    graph_mode="graph_conv", num_graph_steps=0, use_relation=False, graph_aggr="add",
+    graph_mode="graph_conv", num_graph_steps=1, use_relation=False, graph_aggr="add",
     use_orientation=False, num_bins=6, use_distance=False, use_new=False, prepare_epochs=0,
     emb_size=300, hidden_size=512):
         super().__init__()
@@ -105,10 +105,10 @@ class CapNet(nn.Module):
         if use_relation: assert use_topdown # only enable use_relation in topdown captioning module
 
         if num_graph_steps > 0:
-            self.graph = GraphModule(128,num_graph_steps)
-            # self.graph = GraphModule(128, 128, num_graph_steps, num_proposal, 128, num_locals, 
-            #     query_mode, graph_mode, return_edge=use_relation, graph_aggr=graph_aggr, 
-            #     return_orientation=use_orientation, num_bins=num_bins, return_distance=use_distance)
+            # self.graph = GraphModule(128,num_graph_steps)
+            self.graph = GraphModule(128, 128, num_graph_steps, num_proposal, 128, num_locals,
+                query_mode, graph_mode, return_edge=use_relation, graph_aggr=graph_aggr,
+                return_orientation=use_orientation, num_bins=num_bins, return_distance=use_distance, backbone=self.detection_backbone)
 
         # Caption generation
         if not no_caption:
