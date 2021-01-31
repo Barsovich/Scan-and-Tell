@@ -1,11 +1,11 @@
 // Copyright 2019 Yan Yan
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,13 +16,13 @@
 #define NMS_CPU_H
 #include <pybind11/pybind11.h>
 // must include pybind11/stl.h if using containers in STL in arguments.
+#include "box_iou.h"
+#include "nms_gpu.h"
 #include <algorithm>
 #include <boost/geometry.hpp>
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
 #include <vector>
-#include "box_iou.h"
-#include "nms_gpu.h"
 namespace spconv {
 namespace py = pybind11;
 using namespace pybind11::literals;
@@ -34,9 +34,9 @@ std::vector<int> non_max_suppression_cpu(py::array_t<DType> boxes,
   auto ndets = boxes.shape(0);
   auto boxes_r = boxes.template unchecked<2>();
   auto order_r = order.template unchecked<1>();
-  auto suppressed = zeros<int>({ndets});
+  auto suppressed = zeros<int>({int(ndets)});
   auto suppressed_rw = suppressed.template mutable_unchecked<1>();
-  auto area = zeros<DType>({ndets});
+  auto area = zeros<DType>({int(ndets)});
   auto area_rw = area.template mutable_unchecked<1>();
   // get areas
   for (int i = 0; i < ndets; ++i) {
@@ -82,7 +82,7 @@ std::vector<int> rotate_non_max_suppression_cpu(py::array_t<DType> box_corners,
   auto ndets = box_corners.shape(0);
   auto box_corners_r = box_corners.template unchecked<3>();
   auto order_r = order.template unchecked<1>();
-  auto suppressed = zeros<int>({ndets});
+  auto suppressed = zeros<int>({int(ndets)});
   auto suppressed_rw = suppressed.template mutable_unchecked<1>();
   auto standup_iou_r = standup_iou.template unchecked<2>();
   std::vector<int> keep;
@@ -181,7 +181,7 @@ std::vector<int> rotate_non_max_suppression_cpu(py::array_t<DType> box_corners,
   }
   return keep;
 }
-
+#ifdef TV_CUDA
 constexpr int const threadsPerBlock = sizeof(unsigned long long) * 8;
 
 template <typename DType>
@@ -196,6 +196,7 @@ int non_max_suppression(py::array_t<DType> boxes, py::array_t<int> keep_out,
                                           boxes.shape(0), boxes.shape(1),
                                           nms_overlap_thresh, device_id);
 }
+#endif
 
 } // namespace spconv
 #endif

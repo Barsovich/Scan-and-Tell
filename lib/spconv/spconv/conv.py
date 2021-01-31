@@ -1,11 +1,11 @@
 # Copyright 2019 Yan Yan
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,14 +16,15 @@ import math
 import time
 
 import numpy as np
-import spconv
-import spconv.functional as Fsp
 import torch
-from spconv import ops
-from spconv.modules import SparseModule
 from torch import nn
 from torch.nn import init
 from torch.nn.parameter import Parameter
+
+import spconv
+import spconv.functional as Fsp
+from spconv import ops
+from spconv.modules import SparseModule
 
 
 def _calculate_fan_in_and_fan_out_hwio(tensor):
@@ -49,6 +50,11 @@ def _calculate_fan_in_and_fan_out_hwio(tensor):
 
 
 class SparseConvolution(SparseModule):
+    __constants__ = [
+        'stride', 'padding', 'dilation', 'groups', 'bias', 'subm', 'inverse',
+        'transposed', 'output_padding', 'fused_bn'
+    ]
+
     def __init__(self,
                  ndim,
                  in_channels,
@@ -63,7 +69,10 @@ class SparseConvolution(SparseModule):
                  output_padding=0,
                  transposed=False,
                  inverse=False,
-                 indice_key=None):
+                 indice_key=None,
+                 fused_bn=False,
+                 use_hash=False,
+                 algo=ops.ConvAlgo.Native):
         super(SparseConvolution, self).__init__()
         assert groups == 1
         if not isinstance(kernel_size, (list, tuple)):
@@ -94,6 +103,9 @@ class SparseConvolution(SparseModule):
         self.groups = groups
         self.subm = subm
         self.indice_key = indice_key
+        self.fused_bn = fused_bn
+        self.use_hash = use_hash
+        self.algo = algo.value
 
         self.weight = Parameter(
             torch.Tensor(*kernel_size, in_channels, out_channels))
@@ -121,52 +133,83 @@ class SparseConvolution(SparseModule):
         if not self.subm:
             if self.transposed:
                 out_spatial_shape = ops.get_deconv_output_size(
-                    spatial_shape, self.kernel_size, self.stride, self.padding, self.dilation, self.output_padding)
+                    spatial_shape, self.kernel_size, self.stride, self.padding,
+                    self.dilation, self.output_padding)
             else:
                 out_spatial_shape = ops.get_conv_output_size(
-                    spatial_shape, self.kernel_size, self.stride, self.padding, self.dilation)
-
+                    spatial_shape, self.kernel_size, self.stride, self.padding,
+                    self.dilation)
         else:
             out_spatial_shape = spatial_shape
         # input.update_grid(out_spatial_shape)
         # t = time.time()
         if self.conv1x1:
-            input.features = torch.mm(
+            features = torch.mm(
                 input.features,
                 self.weight.view(self.in_channels, self.out_channels))
             if self.bias is not None:
-                input.features += self.bias
-            return input
+                features += self.bias
+            out_tensor = spconv.SparseConvTensor(features, input.indices,
+                                                 input.spatial_shape,
+                                                 input.batch_size)
+            out_tensor.indice_dict = input.indice_dict
+            out_tensor.grid = input.grid
+            return out_tensor
         datas = input.find_indice_pair(self.indice_key)
         if self.inverse:
             assert datas is not None and self.indice_key is not None
             _, outids, indice_pairs, indice_pair_num, out_spatial_shape = datas
-            assert indice_pairs.shape[0] == np.prod(self.kernel_size), "inverse conv must have same kernel size as its couple conv"
+            assert indice_pair_num.shape[0] == np.prod(
+                self.kernel_size
+            ), "inverse conv must have same kernel size as its couple conv"
         else:
             if self.indice_key is not None and datas is not None:
                 outids, _, indice_pairs, indice_pair_num, _ = datas
             else:
                 outids, indice_pairs, indice_pair_num = ops.get_indice_pairs(
-                    indices, batch_size, spatial_shape, self.kernel_size,
-                    self.stride, self.padding, self.dilation, self.output_padding, self.subm, self.transposed, grid=input.grid)
-                input.indice_dict[self.indice_key] = (outids, indices, indice_pairs, indice_pair_num, spatial_shape)
-        if self.subm:
-            out_features = Fsp.indice_subm_conv(features, self.weight,
-                                              indice_pairs.to(device),
-                                              indice_pair_num,
-                                              outids.shape[0])
+                    indices,
+                    batch_size,
+                    spatial_shape,
+                    self.kernel_size,
+                    self.stride,
+                    self.padding,
+                    self.dilation,
+                    self.output_padding,
+                    self.subm,
+                    self.transposed,
+                    grid=input.grid,
+                    use_hash=self.use_hash)
+                input.indice_dict[self.indice_key] = (outids, indices,
+                                                      indice_pairs,
+                                                      indice_pair_num,
+                                                      spatial_shape)
+        if self.fused_bn:
+            assert self.bias is not None
+            out_features = ops.fused_indice_conv(features, self.weight,
+                                                 self.bias,
+                                                 indice_pairs.to(device),
+                                                 indice_pair_num,
+                                                 outids.shape[0], self.inverse,
+                                                 self.subm)
         else:
-            if self.inverse:
-                out_features = Fsp.indice_inverse_conv(features,
-                                            self.weight, indice_pairs.to(device),
-                                            indice_pair_num, outids.shape[0])
+            if self.subm:
+                out_features = Fsp.indice_subm_conv(features, self.weight,
+                                                    indice_pairs.to(device),
+                                                    indice_pair_num,
+                                                    outids.shape[0], self.algo)
             else:
-                out_features = Fsp.indice_conv(features,
-                                            self.weight, indice_pairs.to(device),
-                                            indice_pair_num, outids.shape[0])
+                if self.inverse:
+                    out_features = Fsp.indice_inverse_conv(
+                        features, self.weight, indice_pairs.to(device),
+                        indice_pair_num, outids.shape[0], self.algo)
+                else:
+                    out_features = Fsp.indice_conv(features, self.weight,
+                                                   indice_pairs.to(device),
+                                                   indice_pair_num,
+                                                   outids.shape[0], self.algo)
 
-        if self.bias is not None:
-            out_features += self.bias
+            if self.bias is not None:
+                out_features += self.bias
         out_tensor = spconv.SparseConvTensor(out_features, outids,
                                              out_spatial_shape, batch_size)
         out_tensor.indice_dict = input.indice_dict
@@ -184,18 +227,21 @@ class SparseConv2d(SparseConvolution):
                  dilation=1,
                  groups=1,
                  bias=True,
-                 indice_key=None):
-        super(SparseConv2d, self).__init__(
-            2,
-            in_channels,
-            out_channels,
-            kernel_size,
-            stride,
-            padding,
-            dilation,
-            groups,
-            bias,
-            indice_key=indice_key)
+                 indice_key=None,
+                 use_hash=False,
+                 algo=ops.ConvAlgo.Native):
+        super(SparseConv2d, self).__init__(2,
+                                           in_channels,
+                                           out_channels,
+                                           kernel_size,
+                                           stride,
+                                           padding,
+                                           dilation,
+                                           groups,
+                                           bias,
+                                           indice_key=indice_key,
+                                           use_hash=use_hash,
+                                           algo=algo)
 
 
 class SparseConv3d(SparseConvolution):
@@ -208,18 +254,49 @@ class SparseConv3d(SparseConvolution):
                  dilation=1,
                  groups=1,
                  bias=True,
-                 indice_key=None):
-        super(SparseConv3d, self).__init__(
-            3,
-            in_channels,
-            out_channels,
-            kernel_size,
-            stride,
-            padding,
-            dilation,
-            groups,
-            bias,
-            indice_key=indice_key)
+                 indice_key=None,
+                 use_hash=False,
+                 algo=ops.ConvAlgo.Native):
+        super(SparseConv3d, self).__init__(3,
+                                           in_channels,
+                                           out_channels,
+                                           kernel_size,
+                                           stride,
+                                           padding,
+                                           dilation,
+                                           groups,
+                                           bias,
+                                           indice_key=indice_key,
+                                           use_hash=use_hash,
+                                           algo=algo)
+
+
+class SparseConv4d(SparseConvolution):
+    def __init__(self,
+                 in_channels,
+                 out_channels,
+                 kernel_size,
+                 stride=1,
+                 padding=0,
+                 dilation=1,
+                 groups=1,
+                 bias=True,
+                 indice_key=None,
+                 use_hash=False,
+                 algo=ops.ConvAlgo.Native):
+        super(SparseConv4d, self).__init__(4,
+                                           in_channels,
+                                           out_channels,
+                                           kernel_size,
+                                           stride,
+                                           padding,
+                                           dilation,
+                                           groups,
+                                           bias,
+                                           indice_key=indice_key,
+                                           use_hash=use_hash,
+                                           algo=algo)
+
 
 class SparseConvTranspose2d(SparseConvolution):
     def __init__(self,
@@ -231,19 +308,22 @@ class SparseConvTranspose2d(SparseConvolution):
                  dilation=1,
                  groups=1,
                  bias=True,
-                 indice_key=None):
-        super(SparseConvTranspose2d, self).__init__(
-            2,
-            in_channels,
-            out_channels,
-            kernel_size,
-            stride,
-            padding,
-            dilation,
-            groups,
-            bias,
-            transposed=True,
-            indice_key=indice_key)
+                 indice_key=None,
+                 use_hash=False,
+                 algo=ops.ConvAlgo.Native):
+        super(SparseConvTranspose2d, self).__init__(2,
+                                                    in_channels,
+                                                    out_channels,
+                                                    kernel_size,
+                                                    stride,
+                                                    padding,
+                                                    dilation,
+                                                    groups,
+                                                    bias,
+                                                    transposed=True,
+                                                    indice_key=indice_key,
+                                                    use_hash=use_hash,
+                                                    algo=algo)
 
 
 class SparseConvTranspose3d(SparseConvolution):
@@ -256,20 +336,23 @@ class SparseConvTranspose3d(SparseConvolution):
                  dilation=1,
                  groups=1,
                  bias=True,
-                 
-                 indice_key=None):
-        super(SparseConvTranspose3d, self).__init__(
-            3,
-            in_channels,
-            out_channels,
-            kernel_size,
-            stride,
-            padding,
-            dilation,
-            groups,
-            bias,
-            transposed=True,
-            indice_key=indice_key)
+                 indice_key=None,
+                 use_hash=False,
+                 algo=ops.ConvAlgo.Native):
+        super(SparseConvTranspose3d, self).__init__(3,
+                                                    in_channels,
+                                                    out_channels,
+                                                    kernel_size,
+                                                    stride,
+                                                    padding,
+                                                    dilation,
+                                                    groups,
+                                                    bias,
+                                                    transposed=True,
+                                                    indice_key=indice_key,
+                                                    use_hash=use_hash,
+                                                    algo=algo)
+
 
 class SparseInverseConv2d(SparseConvolution):
     def __init__(self,
@@ -277,15 +360,16 @@ class SparseInverseConv2d(SparseConvolution):
                  out_channels,
                  kernel_size,
                  indice_key,
-                 bias=True):
-        super(SparseInverseConv2d, self).__init__(
-            2,
-            in_channels,
-            out_channels,
-            kernel_size,
-            bias=bias,
-            inverse=True,
-            indice_key=indice_key)
+                 bias=True,
+                 algo=ops.ConvAlgo.Native):
+        super(SparseInverseConv2d, self).__init__(2,
+                                                  in_channels,
+                                                  out_channels,
+                                                  kernel_size,
+                                                  bias=bias,
+                                                  inverse=True,
+                                                  indice_key=indice_key,
+                                                  algo=algo)
 
 
 class SparseInverseConv3d(SparseConvolution):
@@ -294,15 +378,16 @@ class SparseInverseConv3d(SparseConvolution):
                  out_channels,
                  kernel_size,
                  indice_key,
-                 bias=True):
-        super(SparseInverseConv3d, self).__init__(
-            3,
-            in_channels,
-            out_channels,
-            kernel_size,
-            bias=bias,
-            inverse=True,
-            indice_key=indice_key)
+                 bias=True,
+                 algo=ops.ConvAlgo.Native):
+        super(SparseInverseConv3d, self).__init__(3,
+                                                  in_channels,
+                                                  out_channels,
+                                                  kernel_size,
+                                                  bias=bias,
+                                                  inverse=True,
+                                                  indice_key=indice_key,
+                                                  algo=algo)
 
 
 class SubMConv2d(SparseConvolution):
@@ -315,19 +400,22 @@ class SubMConv2d(SparseConvolution):
                  dilation=1,
                  groups=1,
                  bias=True,
-                 indice_key=None):
-        super(SubMConv2d, self).__init__(
-            2,
-            in_channels,
-            out_channels,
-            kernel_size,
-            stride,
-            padding,
-            dilation,
-            groups,
-            bias,
-            True,
-            indice_key=indice_key)
+                 indice_key=None,
+                 use_hash=False,
+                 algo=ops.ConvAlgo.Native):
+        super(SubMConv2d, self).__init__(2,
+                                         in_channels,
+                                         out_channels,
+                                         kernel_size,
+                                         stride,
+                                         padding,
+                                         dilation,
+                                         groups,
+                                         bias,
+                                         True,
+                                         indice_key=indice_key,
+                                         use_hash=use_hash,
+                                         algo=algo)
 
 
 class SubMConv3d(SparseConvolution):
@@ -340,16 +428,47 @@ class SubMConv3d(SparseConvolution):
                  dilation=1,
                  groups=1,
                  bias=True,
-                 indice_key=None):
-        super(SubMConv3d, self).__init__(
-            3,
-            in_channels,
-            out_channels,
-            kernel_size,
-            stride,
-            padding,
-            dilation,
-            groups,
-            bias,
-            True,
-            indice_key=indice_key)
+                 indice_key=None,
+                 use_hash=False,
+                 algo=ops.ConvAlgo.Native):
+        super(SubMConv3d, self).__init__(3,
+                                         in_channels,
+                                         out_channels,
+                                         kernel_size,
+                                         stride,
+                                         padding,
+                                         dilation,
+                                         groups,
+                                         bias,
+                                         True,
+                                         indice_key=indice_key,
+                                         use_hash=use_hash,
+                                         algo=algo)
+
+
+class SubMConv4d(SparseConvolution):
+    def __init__(self,
+                 in_channels,
+                 out_channels,
+                 kernel_size,
+                 stride=1,
+                 padding=0,
+                 dilation=1,
+                 groups=1,
+                 bias=True,
+                 indice_key=None,
+                 use_hash=False,
+                 algo=ops.ConvAlgo.Native):
+        super(SubMConv4d, self).__init__(4,
+                                         in_channels,
+                                         out_channels,
+                                         kernel_size,
+                                         stride,
+                                         padding,
+                                         dilation,
+                                         groups,
+                                         bias,
+                                         True,
+                                         indice_key=indice_key,
+                                         use_hash=use_hash,
+                                         algo=algo)

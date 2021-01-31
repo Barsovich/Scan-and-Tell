@@ -1,19 +1,28 @@
 # Copyright 2019 Yan Yan
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import spconv
+from enum import Enum
+
 import torch
+
+import spconv
+
+
+class ConvAlgo(Enum):
+    Native = 0  # small memory cost, faster when number of points is large.
+    Batch = 1  # high memory cost, faster when number of points is small (< 50000)
+    BatchGemmGather = 2  # high memory cost, faster when number of points medium
 
 
 def get_conv_output_size(input_size, kernel_size, stride, padding, dilation):
@@ -30,7 +39,7 @@ def get_conv_output_size(input_size, kernel_size, stride, padding, dilation):
 
 
 def get_deconv_output_size(input_size, kernel_size, stride, padding, dilation,
-                            output_padding):
+                           output_padding):
     ndim = len(input_size)
     output_size = []
     for i in range(ndim):
@@ -43,16 +52,17 @@ def get_deconv_output_size(input_size, kernel_size, stride, padding, dilation,
 
 
 def get_indice_pairs(indices,
-             batch_size,
-             spatial_shape,
-             ksize=3,
-             stride=1,
-             padding=0,
-             dilation=1,
-             out_padding=0,
-             subm=False,
-             transpose=False,
-             grid=None):
+                     batch_size,
+                     spatial_shape,
+                     ksize=3,
+                     stride=1,
+                     padding=0,
+                     dilation=1,
+                     out_padding=0,
+                     subm=False,
+                     transpose=False,
+                     grid=None,
+                     use_hash=False):
     ndim = indices.shape[1] - 1
     if not isinstance(ksize, (list, tuple)):
         ksize = [ksize] * ndim
@@ -67,26 +77,23 @@ def get_indice_pairs(indices,
 
     for d, s in zip(dilation, stride):
         assert any([s == 1, d == 1]), "don't support this."
-    
+
     if not subm:
         if transpose:
-            out_shape = get_deconv_output_size(spatial_shape, ksize, stride, padding,
-                                            dilation, out_padding)
+            out_shape = get_deconv_output_size(spatial_shape, ksize, stride,
+                                               padding, dilation, out_padding)
         else:
-            out_shape = get_conv_output_size(spatial_shape, ksize, stride, padding,
-                                            dilation)
-
+            out_shape = get_conv_output_size(spatial_shape, ksize, stride,
+                                             padding, dilation)
     else:
         out_shape = spatial_shape
     if grid is None:
-        if ndim == 2:
-            get_indice_pairs_func = torch.ops.spconv.get_indice_pairs_2d
-        elif ndim == 3:
-            get_indice_pairs_func = torch.ops.spconv.get_indice_pairs_3d
-        else:
-            raise NotImplementedError
-        return get_indice_pairs_func(indices, batch_size, out_shape, spatial_shape, ksize,
-                            stride, padding, dilation, out_padding, int(subm), int(transpose))
+        res = torch.ops.spconv.get_indice_pairs(indices, batch_size, out_shape,
+                                                spatial_shape, ksize, stride,
+                                                padding, dilation, out_padding,
+                                                int(subm), int(transpose),
+                                                int(use_hash))
+        return res
     else:
         if ndim == 2:
             get_indice_pairs_func = torch.ops.spconv.get_indice_pairs_grid_2d
@@ -94,64 +101,68 @@ def get_indice_pairs(indices,
             get_indice_pairs_func = torch.ops.spconv.get_indice_pairs_grid_3d
         else:
             raise NotImplementedError
-        return get_indice_pairs_func(indices, grid, batch_size, out_shape, spatial_shape, ksize,
-                            stride, padding, dilation, out_padding, int(subm), int(transpose))
-
+        return get_indice_pairs_func(indices, grid, batch_size, out_shape,
+                                     spatial_shape, ksize, stride, padding,
+                                     dilation, out_padding, int(subm),
+                                     int(transpose), int(use_hash))
 
 
 def indice_conv(features,
-              filters,
-              indice_pairs,
-              indice_pair_num,
-              num_activate_out,
-              inverse=False,
-              subm=False):
-    if filters.dtype == torch.float32:
-        return torch.ops.spconv.indice_conv_fp32(features, filters, indice_pairs,
-                                               indice_pair_num, num_activate_out,
-                                               int(inverse), int(subm))
-    elif filters.dtype == torch.half:
-        return torch.ops.spconv.indice_conv_half(features, filters, indice_pairs,
-                                               indice_pair_num, num_activate_out,
-                                               int(inverse), int(subm))
-    else:
-        raise NotImplementedError
+                filters,
+                indice_pairs,
+                indice_pair_num,
+                num_activate_out,
+                inverse=False,
+                subm=False,
+                algo=ConvAlgo.Native.value):
+    return torch.ops.spconv.indice_conv(features, filters, indice_pairs,
+                                        indice_pair_num, num_activate_out,
+                                        int(inverse), int(subm), algo)
+
+
+def fused_indice_conv(features, filters, bias, indice_pairs, indice_pair_num,
+                      num_activate_out, inverse, subm):
+    return torch.ops.spconv.fused_indice_conv_bn(features, filters, bias,
+                                                 indice_pairs, indice_pair_num,
+                                                 num_activate_out,
+                                                 int(inverse), int(subm))
 
 
 def indice_conv_backward(features,
-                       filters,
-                       out_bp,
-                       indice_pairs,
-                       indice_pair_num,
-                       inverse=False,
-                       subm=False):
-    if filters.dtype == torch.float32:
-        return torch.ops.spconv.indice_conv_backward_fp32(
-            features, filters, out_bp, indice_pairs, indice_pair_num, int(inverse), int(subm))
-    elif filters.dtype == torch.half:
-        return torch.ops.spconv.indice_conv_backward_half(
-            features, filters, out_bp, indice_pairs, indice_pair_num, int(inverse), int(subm))
-    else:
-        raise NotImplementedError
+                         filters,
+                         out_bp,
+                         indice_pairs,
+                         indice_pair_num,
+                         inverse=False,
+                         subm=False,
+                         algo=ConvAlgo.Native.value):
+    return torch.ops.spconv.indice_conv_backward(features, filters, out_bp,
+                                                 indice_pairs, indice_pair_num,
+                                                 int(inverse), int(subm), algo)
 
 
 def indice_maxpool(features, indice_pairs, indice_pair_num, num_activate_out):
-    if features.dtype == torch.float32:
-        return torch.ops.spconv.indice_maxpool_fp32(features, indice_pairs, indice_pair_num,
-                                                  num_activate_out)
-    elif features.dtype == torch.half:
-        return torch.ops.spconv.indice_maxpool_half(features, indice_pairs, indice_pair_num,
-                                                  num_activate_out)
-    else:
-        raise NotImplementedError
+    return torch.ops.spconv.indice_maxpool(features, indice_pairs,
+                                           indice_pair_num, num_activate_out)
 
 
-def indice_maxpool_backward(features, out_features, out_bp, indice_pairs, indice_pair_num):
+def indice_maxpool_backward(features, out_features, out_bp, indice_pairs,
+                            indice_pair_num):
+    return torch.ops.spconv.indice_maxpool_backward(features, out_features,
+                                                    out_bp, indice_pairs,
+                                                    indice_pair_num)
+
+
+def nms(boxes, scores, pre_max_size, post_max_size, thresh, eps):
+    res = torch.ops.spconv.nms(boxes, scores, pre_max_size, post_max_size,
+                               thresh, eps)
+    return res
+
+
+def pillar_scatter(features, coors, shape):
     if features.dtype == torch.float32:
-        return torch.ops.spconv.indice_maxpool_backward_fp32(
-            features, out_features, out_bp, indice_pairs, indice_pair_num)
+        return torch.ops.spconv.pillar_scatter_float(features, coors, shape)
     elif features.dtype == torch.half:
-        return torch.ops.spconv.indice_maxpool_backward_half(
-            features, out_features, out_bp, indice_pairs, indice_pair_num)
+        return torch.ops.spconv.pillar_scatter_half(features, coors, shape)
     else:
         raise NotImplementedError
