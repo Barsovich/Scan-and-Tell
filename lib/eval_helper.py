@@ -443,7 +443,7 @@ def remap_semantic_ids(sematic_ids):
         remapped_labels[i] = remapper[l]
     return remapped_labels
 
-def feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,no_detection=False):
+def feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,no_detection=False,min_iou=0.25):
 
     semantic_label_idx = [3,4,5,6,7,8,9,10,11,12,14,16,24,28,33,34,36,39]
     
@@ -545,7 +545,7 @@ def feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,no_detection=False):
                 # gt_instance_idxs = gt_instance_idxs[mask][pick_idxs]
                 captions = captions[mask][pick_idxs]
 
-                iou_thresh_mask = gt_ious > 0.5
+                iou_thresh_mask = gt_ious > min_iou
                 gt_ious = gt_ious[iou_thresh_mask]
                 gt_instance_idxs = gt_instance_idxs[iou_thresh_mask]
                 captions = captions[iou_thresh_mask]
@@ -566,23 +566,25 @@ def feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,no_detection=False):
                         continue
     return candidates, meter_dict, visual_dict
 
-def process_gt2pred(gt2pred):
-    gt2predlist = []
-    for label, gts in gt2pred.items():
-        for gt in gts:
-            matched_pred_id = -1 if len(gt['matched_pred']) == 0 else gt['matched_pred'][0]['pred_id'] # select the prediction with the highest confidencec
-            gt2predlist.append((gt['instance_id'] % 1000, matched_pred_id))
-    return gt2predlist # [(gt_id, pred_id)]
+# def process_gt2pred(gt2pred):
+#     gt2predlist = []
+#     for label, gts in gt2pred.items():
+#         for gt in gts:
+#             matched_pred_id = -1 if len(gt['matched_pred']) == 0 else gt['matched_pred'][0]['pred_id'] # select the prediction with the highest confidencec
+#             gt2predlist.append((gt['instance_id'] % 1000, matched_pred_id))
+#     return gt2predlist # [(gt_id, pred_id)]
 
-def process_pred2gt(pred2gt):
-    pred2gt_dict = {}
-    for label, preds in pred2gt.items():
-        for pred in preds:
-            matched_gt_id = -1 if len(pred['matched_gt']) == 0 else pred['matched_gt'][0]['instance_id'] % 1000 # select the prediction with the highest confidencec
-            pred2gt_dict[pred['pred_id']] = matched_gt_id
-    return pred2gt_dict # [(pred_id, gt_id)]
+# def process_pred2gt(pred2gt):
+#     pred2gt_dict = {}
+#     for label, preds in pred2gt.items():
+#         for pred in preds:
+#             matched_gt_id = -1 if len(pred['matched_gt']) == 0 else pred['matched_gt'][0]['instance_id'] % 1000 # select the prediction with the highest confidencec
+#             pred2gt_dict[pred['pred_id']] = matched_gt_id
+#     return pred2gt_dict # [(pred_id, gt_id)]
 
-def eval_cap_pointgroup(model,cfg,epoch,dataset,dataloader,no_detection=False,no_caption=False,force=True,max_len=CONF.TRAIN.MAX_DES_LEN):
+def eval_cap_pointgroup(model,cfg,epoch,dataset,dataloader,no_detection=False,no_caption=False,
+    force=True,max_len=CONF.TRAIN.MAX_DES_LEN,min_iou=0.25,task='train'):
+
     am_dict = {}
 
     if no_caption:
@@ -612,7 +614,7 @@ def eval_cap_pointgroup(model,cfg,epoch,dataset,dataloader,no_detection=False,no
                     am_dict[k].update(v[0], v[1])
     else:
 
-        candidates, meter_dict, visual_dict = feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,no_detection)
+        candidates, meter_dict, visual_dict = feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,no_detection,min_iou)
         ##TODO: equivelent steps of feed_scene_cap()
 
         if epoch > cfg.prepare_epochs:
@@ -664,7 +666,11 @@ def eval_cap_pointgroup(model,cfg,epoch,dataset,dataloader,no_detection=False,no
                 am_dict[k] = utils_pointgroup.AverageMeter()
             am_dict[k].update(v[0], v[1])
 
-    return am_dict, visual_dict
+    if task == 'train':
+        return am_dict, visual_dict
+    elif task == 'eval':
+        return bleu,cider,rouge,meteor
+
 
 def get_eval(data_dict, config, caption, use_lang_classifier=False, use_oracle=False, use_cat_rand=False, use_best=False, post_processing=None):
     """ Loss functions

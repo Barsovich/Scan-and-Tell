@@ -44,7 +44,7 @@ def intersectionAndUnion(output, target, K, ignore_index=255):
     return area_intersection, area_union, area_target
 
 
-def checkpoint_restore(model, exp_path, exp_name, use_cuda=True, epoch=0, dist=False, f=''):
+def checkpoint_restore(model, exp_path, exp_name, use_cuda=True, epoch=0, strict=True, dist=False, f=''):
     if use_cuda:
         model.cpu()
     if not f:
@@ -65,9 +65,9 @@ def checkpoint_restore(model, exp_path, exp_name, use_cuda=True, epoch=0, dist=F
                 checkpoint = {k[len('module.'):]: v for k, v in checkpoint.items()}
             break
         if dist:
-            model.module.load_state_dict(checkpoint)
+            model.module.load_state_dict(checkpoint,strict=strict)
         else:
-            model.load_state_dict(checkpoint)
+            model.load_state_dict(checkpoint,strict=strict)
 
     if use_cuda:
         model.cuda()

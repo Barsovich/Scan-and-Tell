@@ -55,50 +55,20 @@ def get_scannet_scene_list(split):
 
     return scene_list
 
-def get_scanrefer(scanrefer_train, scanrefer_val, num_scenes):
-    if cfg.no_caption:
-        train_scene_list = get_scannet_scene_list("train")
-        new_scanrefer_train = []
-        for scene_id in train_scene_list:
-            data = deepcopy(SCANREFER_TRAIN[0])
-            data["scene_id"] = scene_id
-            new_scanrefer_train.append(data)
+def get_eval_data(cfg):
+    eval_scene_list = get_scannet_scene_list("train") if cfg.use_train else get_scannet_scene_list("val")
+    scanrefer_eval = []
+    for scene_id in eval_scene_list:
+        data = deepcopy(SCANREFER_TRAIN[0]) if args.use_train else deepcopy(SCANREFER_VAL[0])
+        data["scene_id"] = scene_id
+        scanrefer_eval.append(data)
 
-        val_scene_list = get_scannet_scene_list("val")
-        new_scanrefer_val = []
-        for scene_id in val_scene_list:
-            data = deepcopy(SCANREFER_VAL[0])
-            data["scene_id"] = scene_id
-            new_scanrefer_val.append(data)
-    else:
-        # get initial scene list
-        train_scene_list = sorted(list(set([data["scene_id"] for data in scanrefer_train])))
-        val_scene_list = sorted(list(set([data["scene_id"] for data in scanrefer_val])))
-        if num_scenes == -1:
-            num_scenes = len(train_scene_list)
-        else:
-            assert len(train_scene_list) >= num_scenes
+    print("eval on {} samples".format(len(scanrefer_eval)))
 
-        # slice train_scene_list
-        train_scene_list = train_scene_list[:num_scenes]
-
-        # filter data in chosen scenes
-        new_scanrefer_train = []
-        for data in scanrefer_train:
-            if data["scene_id"] in train_scene_list:
-                new_scanrefer_train.append(data)
-
-        new_scanrefer_val = scanrefer_val
-
-    # all scanrefer scene
-    all_scene_list = train_scene_list + val_scene_list
-
-    print("train on {} samples and val on {} samples".format(len(new_scanrefer_train), len(new_scanrefer_val)))
-
-    return new_scanrefer_train, new_scanrefer_val, all_scene_list
+    return scanrefer_eval, eval_scene_list
 
 
-def test(model, dataloader, epoch, val_scene_list):
+def test_detection(model, dataloader, epoch, val_scene_list):
     logger.info('>>>>>>>>>>>>>>>> Start Evaluation >>>>>>>>>>>>>>>>')
 
     # scanrefer_train, scanrefer_val, all_scene_list = get_scanrefer(SCANREFER_TRAIN, SCANREFER_VAL, -1)
@@ -277,6 +247,22 @@ def non_max_suppression(ious, scores, threshold):
         ixs = np.delete(ixs, 0)
     return np.array(pick, dtype=np.int32)
 
+def test_caption(model, dataloader, epoch, val_scene_list):
+
+    bleu,cider,rouge,meteor = eval_cap_pointgroup(model,cfg,epoch,dataset,val_loader,
+        no_detection=False,no_caption=False,force=True,min_iou=cfg.TEST_MIN_IOU,task='eval')
+
+    # report
+    print("\n----------------------Evaluation-----------------------")
+    print("[BLEU-1] Mean: {:.4f}, Max: {:.4f}, Min: {:.4f}".format(bleu[0][0], max(bleu[1][0]), min(bleu[1][0])))
+    print("[BLEU-2] Mean: {:.4f}, Max: {:.4f}, Min: {:.4f}".format(bleu[0][1], max(bleu[1][1]), min(bleu[1][1])))
+    print("[BLEU-3] Mean: {:.4f}, Max: {:.4f}, Min: {:.4f}".format(bleu[0][2], max(bleu[1][2]), min(bleu[1][2])))
+    print("[BLEU-4] Mean: {:.4f}, Max: {:.4f}, Min: {:.4f}".format(bleu[0][3], max(bleu[1][3]), min(bleu[1][3])))
+    print("[CIDEr] Mean: {:.4f}, Max: {:.4f}, Min: {:.4f}".format(cider[0], max(cider[1]), min(cider[1])))
+    print("[ROUGE-L] Mean: {:.4f}, Max: {:.4f}, Min: {:.4f}".format(rouge[0], max(rouge[1]), min(rouge[1])))
+    print("[METEOR] Mean: {:.4f}, Max: {:.4f}, Min: {:.4f}".format(meteor[0], max(meteor[1]), min(meteor[1])))
+    print()
+
 
 if __name__ == '__main__':
     init()
@@ -300,9 +286,9 @@ if __name__ == '__main__':
 
     if cfg.dataset == 'scannet_data':
         if data_name == 'scannet':
-            scanrefer_train, scanrefer_val, all_scene_list = get_scanrefer(SCANREFER_TRAIN, SCANREFER_VAL, -1)
+            scanrefer_val, val_scene_list = get_eval_data(cfg)
             scanrefer = {
-                "train": scanrefer_train,
+                "train": [],
                 "val": scanrefer_val
             }
             import data.dataset_pointgroup
@@ -316,9 +302,9 @@ if __name__ == '__main__':
     dataloader = dataset.val_data_loader
     vocabulary = dataset.vocabulary
     embeddings = dataset.glove
-    val_scene_list = all_scene_list[-312:]
+    #val_scene_list = all_scene_list[-312:]
 
-    model = CapNet(vocabulary, embeddings, cfg, 'pointgroup',no_caption=False,prepare_epochs=cfg.prepare_epochs)
+    model = CapNet(vocabulary, embeddings, cfg, 'pointgroup',no_caption=cfg.no_caption,prepare_epochs=cfg.prepare_epochs)
 
     use_cuda = torch.cuda.is_available()
     logger.info('cuda available: {}'.format(use_cuda))
@@ -332,7 +318,12 @@ if __name__ == '__main__':
     #model_fn = model_fn_decorator(test=True)
 
     ##### load model
-    utils.checkpoint_restore(model, cfg.exp_path, cfg.config.split('/')[-1][:-5], use_cuda, cfg.test_epoch, dist=False, f=cfg.pretrain)      # resume from the latest epoch, or specify the epoch to restore
+    utils.checkpoint_restore(model, cfg.exp_path, cfg.config.split('/')[-1][:-5], use_cuda, cfg.test_epoch, strict=False, dist=False, f=cfg.pretrain)      # resume from the latest epoch, or specify the epoch to restore
 
     ##### evaluate
-    test(model, dataloader, cfg.test_epoch, val_scene_list)
+    if cfg.no_caption: 
+        test_detection(model, dataloader, cfg.test_epoch, val_scene_list)
+    else:
+        test_caption(model,dataloader,cfg.test_epoch,val_scene_list)
+
+
