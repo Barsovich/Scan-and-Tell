@@ -222,7 +222,7 @@ if __name__ == "__main__":
     # args = parser.parse_args()
 
     # setting
-    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
     os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
      # reproducibility

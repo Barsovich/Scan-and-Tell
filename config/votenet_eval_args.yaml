@@ -3,7 +3,7 @@ ARGS:
   model_name: votenet
   task: eval
 
-  folder: 
+  folder: 2021-01-18_04-54-01
   gpu: 0
   batch_size: 8
   
@@ -34,8 +34,9 @@ ARGS:
   use_orientation: False
   use_distance: False
 
-  eval_caption: False
-  eval_detection: True
+  eval_caption: True
+  eval_detection: False
   eval_pretrained: False
   use_train: False
   force: True
+  save_interm: False

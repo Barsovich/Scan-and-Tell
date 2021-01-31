@@ -119,7 +119,7 @@ class Dataset:
         return x + g(x) * mag
 
 
-    def getInstanceInfo(self, xyz, instance_label,object_id):
+    def getInstanceInfo(self, xyz, instance_label,object_id, eval=False):
         '''
         :param xyz: (n, 3)
         :param instance_label: (n), int, (0~nInst-1, -100)
@@ -149,7 +149,7 @@ class Dataset:
                 target_instance_pointnum = inst_idx_i[0].size 
         
         # use placeholder if no_caption; this data won't be used anyway
-        if cfg.no_caption:
+        if cfg.no_caption or eval:
             target_instance_pointnum = 0
 
         return instance_num, {"instance_info": instance_info, "instance_pointnum": instance_pointnum} , target_instance_pointnum
@@ -500,7 +500,7 @@ class Dataset:
             # instance_label = self.getCroppedInstLabel(instance_label, valid_idxs)
 
             ### get instance information
-            inst_num, inst_infos, _ = self.getInstanceInfo(xyz_middle, instance_label.astype(np.int32),object_id)
+            inst_num, inst_infos, _ = self.getInstanceInfo(xyz_middle, instance_label.astype(np.int32),object_id, eval=True)
             inst_info = inst_infos["instance_info"]  # (n, 9), (cx, cy, cz, minx, miny, minz, maxx, maxy, maxz)
             inst_pointnum = inst_infos["instance_pointnum"]  # (nInst), list
 
