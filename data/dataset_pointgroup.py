@@ -1,3 +1,7 @@
+'''
+    Modified from https://github.com/Jia-Research-Lab/PointGroup/blob/master/data/scannetv2_inst.py
+'''
+
 import os, sys, glob, math, numpy as np
 import scipy.ndimage
 import scipy.interpolate

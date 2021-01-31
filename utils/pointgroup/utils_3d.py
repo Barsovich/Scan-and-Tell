@@ -1,3 +1,6 @@
+'''
+Adapted from https://github.com/Jia-Research-Lab/PointGroup/blob/master/util/utils_3d.py
+'''
 # ScanNet util_3d: https://github.com/ScanNet/ScanNet/blob/master/BenchmarkScripts/util_3d.py
 
 import json, numpy as np

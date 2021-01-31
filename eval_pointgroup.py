@@ -1,6 +1,6 @@
 '''
 PointGroup test.py
-Written by Li Jiang
+Adapted from https://github.com/Jia-Research-Lab/PointGroup/blob/master/test.py
 '''
 
 import torch

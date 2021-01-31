@@ -1,6 +1,6 @@
 '''
 Logger
-Written by Li Jiang
+Adapted from https://github.com/Jia-Research-Lab/PointGroup/blob/master/util/log.py
 '''
 
 import logging

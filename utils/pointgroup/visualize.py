@@ -1,6 +1,6 @@
 '''
 Visualization
-Written by Li Jiang
+Adapted from https://github.com/Jia-Research-Lab/PointGroup/blob/master/util/visualize.py
 '''
 
 import numpy as np
