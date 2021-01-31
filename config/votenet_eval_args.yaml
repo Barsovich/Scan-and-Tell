@@ -1,17 +1,12 @@
 ARGS:
   dataset: scannet
   model_name: votenet
-  task: train
+  task: eval
 
-  tag: 
+  folder: 2021-01-18_04-54-01
   gpu: 0
   batch_size: 8
-  verbose: 10
-
-  epoch: 20
-  val_step: 2000
-  lr: 0.001
-  wd: 0.00001
+  
   num_points: 40000
   num_proposals: 256
   num_locals: -1
@@ -25,21 +20,23 @@ ARGS:
   graph_mode: edge_conv
   graph_aggr: add
   
+  min_iou: 0.5
+
   no_height: False
   no_augment: False
-  no_detection: False
-  no_caption: False
   use_tf: True
   use_color: True
   use_normal: False
   use_multiview: True
   use_topdown: False
   use_relation: False
-  use_new: False
+  use_last: False
   use_orientation: False
   use_distance: False
 
-  use_pretrained: 
-  use_checkpoint:
-  debug: False
-  report_ap: False
+  eval_caption: True
+  eval_detection: False
+  eval_pretrained: False
+  use_train: False
+  force: True
+  save_interm: False

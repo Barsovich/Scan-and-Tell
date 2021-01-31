@@ -43,7 +43,9 @@ class Dataset:
         self.mode = cfg.mode
 
         self.use_multiview = cfg.use_multiview
-        self.multiview_data = {}
+        if self.use_multiview:
+            self.multiview_data = h5py.File(os.path.join(self.data_root, self.dataset, 'enet_feats_maxpool.hdf5'), "r",
+                                        libver="latest")
 
         if test:
             self.test_split = cfg.split  # val or test
@@ -74,7 +76,7 @@ class Dataset:
     def valLoader(self):
         self.val_file_names = sorted(list(set([data["scene_id"] for data in self.val_data])))
         #self.val_file_names = list(map(lambda data: os.path.join(self.data_root,self.dataset,'{}_pointgroup.pth'.format(data[' scene_id'])),val_file_names))
-        #val_file_names = sorted(glob.glob(os.path.join(self.data_root, self.dataset, 'val', '*' + self.filename_suffix)))
+        # val_file_names = sorted(glob.glob(os.path.join(self.data_root, self.dataset, 'val', '*' + self.filename_suffix)))
         #self.val_files = [torch.load(i) for i in val_file_names]
 
         logger.info('Validation on {} object samples from {} scenes.'.format(len(self.val_data),len(self.val_file_names)))
@@ -117,7 +119,7 @@ class Dataset:
         return x + g(x) * mag
 
 
-    def getInstanceInfo(self, xyz, instance_label,object_id):
+    def getInstanceInfo(self, xyz, instance_label,object_id, eval=False):
         '''
         :param xyz: (n, 3)
         :param instance_label: (n), int, (0~nInst-1, -100)
@@ -147,7 +149,7 @@ class Dataset:
                 target_instance_pointnum = inst_idx_i[0].size 
         
         # use placeholder if no_caption; this data won't be used anyway
-        if cfg.no_caption:
+        if cfg.no_caption or eval:
             target_instance_pointnum = 0
 
         return instance_num, {"instance_info": instance_info, "instance_pointnum": instance_pointnum} , target_instance_pointnum
@@ -387,11 +389,7 @@ class Dataset:
             
             feat = torch.from_numpy(rgb) + torch.randn(3) * 0.1
             if self.use_multiview:
-                pid = mp.current_process().pid
-                if pid not in self.multiview_data:
-                    self.multiview_data[pid] = h5py.File(os.path.join(self.data_root,self.dataset,'enet_feats_maxpool.hdf5'), "r", libver="latest")
-
-                multiview = torch.from_numpy(self.multiview_data[pid][scene_id][:])[valid_idxs]
+                multiview = torch.from_numpy(self.multiview_data[scene_id][:])[valid_idxs]
                 feat = torch.cat([feat,multiview],1)
 
             feats.append(feat)
@@ -464,15 +462,15 @@ class Dataset:
         object_classes = []
 
         batch_offsets = [0]
+        scene_ids = []
 
         total_inst_num = 0
         for i, idx in enumerate(id):
-
-            #get object 
-            scene_id = self.train_data[idx]["scene_id"]
-            object_id = int(self.train_data[idx]["object_id"])
-            object_name = " ".join(self.train_data[idx]["object_name"].split("_"))
-            ann_id = self.train_data[idx]["ann_id"]
+            #get object
+            scene_id = self.val_data[idx]["scene_id"]
+            object_id = int(self.val_data[idx]["object_id"])
+            object_name = " ".join(self.val_data[idx]["object_name"].split("_"))
+            ann_id = self.val_data[idx]["ann_id"]
 
             #get language features
             lang_feat = self.lang[scene_id][str(object_id)][ann_id]
@@ -491,18 +489,18 @@ class Dataset:
 
             ### offset
             xyz -= xyz.min(0)
-
-            ### crop
-            xyz, valid_idxs = random_sampling(xyz, self.max_npoint, return_choices=True)
-
-            xyz_middle = xyz_middle[valid_idxs]
-            # xyz = xyz[valid_idxs]
-            rgb = rgb[valid_idxs]
-            label = label[valid_idxs]
-            instance_label = self.getCroppedInstLabel(instance_label, valid_idxs)
+            #
+            # ### crop
+            # xyz, valid_idxs = random_sampling(xyz, self.max_npoint, return_choices=True)
+            #
+            # xyz_middle = xyz_middle[valid_idxs]
+            # # xyz = xyz[valid_idxs]
+            # rgb = rgb[valid_idxs]
+            # label = label[valid_idxs]
+            # instance_label = self.getCroppedInstLabel(instance_label, valid_idxs)
 
             ### get instance information
-            inst_num, inst_infos, _ = self.getInstanceInfo(xyz_middle, instance_label.astype(np.int32),object_id)
+            inst_num, inst_infos, _ = self.getInstanceInfo(xyz_middle, instance_label.astype(np.int32),object_id, eval=True)
             inst_info = inst_infos["instance_info"]  # (n, 9), (cx, cy, cz, minx, miny, minz, maxx, maxy, maxz)
             inst_pointnum = inst_infos["instance_pointnum"]  # (nInst), list
 
@@ -510,6 +508,7 @@ class Dataset:
             total_inst_num += inst_num
 
             ### merge the scene to the batch
+            scene_ids.append(scene_id)
             ann_ids.append(int(ann_id))
             object_ids.append(int(object_id))
             batch_offsets.append(batch_offsets[-1] + xyz.shape[0])
@@ -519,11 +518,7 @@ class Dataset:
 
             feat = torch.from_numpy(rgb) 
             if self.use_multiview:
-                pid = mp.current_process().pid
-                if pid not in self.multiview_data:
-                    self.multiview_data[pid] = h5py.File(os.path.join(self.data_root,self.dataset,'enet_feats_maxpool.hdf5'), "r", libver="latest")
-
-                multiview = torch.from_numpy(self.multiview_data[pid][scene_id][:])[valid_idxs]
+                multiview = torch.from_numpy(self.multiview_data[scene_id][:])
                 feat = torch.cat([feat,multiview],1)
 
             feats.append(feat)
@@ -567,7 +562,7 @@ class Dataset:
                 'instance_info': instance_infos, 'instance_pointnum': instance_pointnum,
                 'id': id, 'offsets': batch_offsets, 'spatial_shape': spatial_shape, 
                 'lang_feat': lang_feats, 'lang_len': lang_lens, 'lang_ids': lang_ids, 
-                'ann_id': ann_ids, 'object_id': object_ids }
+                'ann_id': ann_ids, 'object_id': object_ids, 'scene_id': scene_ids}
 
 
     def testMerge(self, id):

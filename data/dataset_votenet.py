@@ -93,11 +93,10 @@ class ScannetReferenceDataset(Dataset):
 
         if self.use_multiview:
             # load multiview database
-            pid = mp.current_process().pid
-            if pid not in self.multiview_data:
-                self.multiview_data[pid] = h5py.File(MULTIVIEW_DATA, "r", libver="latest")
+            if self.multiview_data == {}:
+                self.multiview_data = h5py.File(MULTIVIEW_DATA, "r", libver="latest")
 
-            multiview = self.multiview_data[pid][scene_id]
+            multiview = self.multiview_data[scene_id]
             point_cloud = np.concatenate([point_cloud, multiview],1)
 
         if self.use_height:

@@ -81,7 +81,7 @@ def calculate_pred_bboxes_pointgroup(point_coords, proposals_pred, cluster_seman
             	for j in range(num_of_prediction_proposals):
             		[	
             			semantic_class -> (float), 
-            			bbox -> ([min_x, min_y, min_z, max_x, max_y, max_z]), 
+            			bbox -> ([center_x, center_y, center_z, length_x, length_y, length_z]),
             			bbox_score -> (float, [0-1])
         			]
     """
