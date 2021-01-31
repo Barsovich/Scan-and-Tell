@@ -118,7 +118,6 @@ def train_epoch(train_loader, model, optimizer, epoch):
         
         ##### prepare input and forward
         data_dict = model(data_dict, epoch, use_tf=True, is_eval=False)
-        #loss, _, visual_dict, meter_dict = model_fn(batch, model, epoch)
 
         ##### loss calculation
         loss, loss_dict, visual_dict, meter_dict = get_pointgroup_cap_loss(data_dict,cfg,epoch,
@@ -173,35 +172,6 @@ def eval_epoch(val_loader, model, epoch,dataset):
     am_dict,visual_dict = eval_cap_pointgroup(model,cfg,epoch,dataset,val_loader,
         no_detection=cfg.no_detection,no_caption=cfg.no_caption,force=True)
 
-    # am_dict = {}
-
-    # with torch.no_grad():
-    #     model.eval()
-    #     start_epoch = time.time()
-    #     for i, data_dict in enumerate(val_loader):
-
-    #         #move to cuda 
-    #         for key in data_dict:
-    #             if type(data_dict[key]) == torch.Tensor:
-    #                 data_dict[key] = data_dict[key].cuda()
-    #             else:
-    #                 pass
-
-    #         ##### prepare input and forward
-    #         data_dict = model(data_dict, epoch, use_tf=False, is_eval=True)
-
-    #         loss, loss_dict, visual_dict, meter_dict = get_pointgroup_cap_loss(data_dict,cfg,epoch)
-
-    #         ##### meter_dict
-    #         for k, v in meter_dict.items():
-    #             if k not in am_dict.keys():
-    #                 am_dict[k] = utils.AverageMeter()
-    #             am_dict[k].update(v[0], v[1])
-
-    #         ##### print
-    #         sys.stdout.write("\riter: {}/{} loss: {:.4f}({:.4f})".format(i + 1, len(val_loader), am_dict['loss'].val, am_dict['loss'].avg))
-    #         if (i == len(val_loader) - 1): print()
-
     logger.info("epoch: {}/{}, val loss: {:.4f}, time: {}s".format(epoch, cfg.epochs, am_dict['loss'].avg, time.time() - start_epoch))
 
     for k in am_dict.keys():
@@ -223,14 +193,9 @@ if __name__ == '__main__':
 
     if model_name == 'pointgroup':
         from models.capnet import CapNet
-        #from models.pointgroup import PointGroup as Network
-        #from models.pointgroup import model_fn_decorator
     else:
         print("Error: no model - " + model_name)
         exit(0)
-
-    ##### model_fn (criterion)
-    #model_fn = model_fn_decorator()
 
     ##### dataset
     if cfg.dataset == 'scannet_data':
@@ -275,5 +240,4 @@ if __name__ == '__main__':
         train_epoch(dataset.train_data_loader, model, optimizer, epoch)
 
         if utils.is_multiple(epoch, cfg.save_freq,) or utils.is_power2(epoch):
-            # eval_epoch(dataset.val_data_loader, model, epoch, dataset)
-            pass
+            eval_epoch(dataset.val_data_loader, model, epoch, dataset)

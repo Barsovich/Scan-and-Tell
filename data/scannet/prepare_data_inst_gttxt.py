@@ -4,7 +4,6 @@ Generate instance groundtruth .txt files (for evaluation)
 '''
 
 import numpy as np
-import glob
 import torch
 import os
 import sys

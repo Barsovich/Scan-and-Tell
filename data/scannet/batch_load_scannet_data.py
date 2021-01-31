@@ -4,12 +4,10 @@
 
 '''
 import os
-import sys
 import datetime
 import numpy as np
 from load_scannet_data import export, read_segmentation
-import pdb
-import argparse 
+import argparse
 import scannet_utils
 import torch
 
@@ -51,7 +49,6 @@ def export_one_scan(model, scan_name, output_filename_prefix):
             num_instances = len(np.unique(instance_labels))
             print('Num of instances: ', num_instances)
 
-            # bbox_mask = np.in1d(instance_bboxes[:,-1], OBJ_CLASS_IDS)
             bbox_mask = np.in1d(instance_bboxes[:,-2], OBJ_CLASS_IDS) # match the mesh2cap
             instance_bboxes = instance_bboxes[bbox_mask,:]
             aligned_instance_bboxes = aligned_instance_bboxes[bbox_mask,:]
@@ -141,8 +138,7 @@ def batch_export():
         
     for scan_name in SCAN_NAMES:
         output_filename_prefix = os.path.join(OUTPUT_FOLDER, scan_name)
-        # if os.path.exists(output_filename_prefix + '_vert.npy'): continue
-        
+
         print('-'*20+'begin')
         print(datetime.datetime.now())
         print(scan_name)

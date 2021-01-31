@@ -5,7 +5,6 @@
 
 import torch
 import torch.nn as nn
-import numpy as np
 import sys
 import os
 
@@ -14,7 +13,6 @@ from models.backbone_module import Pointnet2Backbone
 from models.voting_module import VotingModule
 from models.proposal_module import ProposalModule
 from models.pointgroup import PointGroup
-from models.graph_module import GraphModule
 from models.captioning_module import PlainCapModule, AttentionCapModule, SceneCaptionModule
 
 from data.scannet.model_util_scannet import ScannetDatasetConfig
@@ -110,10 +108,8 @@ class CapNet(nn.Module):
         if use_relation: assert use_topdown # only enable use_relation in topdown captioning module
 
         if num_graph_steps > 0:
-            self.graph = GraphModule(128,num_graph_steps)
-            # self.graph = GraphModule(128, 128, num_graph_steps, num_proposal, 128, num_locals, 
-            #     query_mode, graph_mode, return_edge=use_relation, graph_aggr=graph_aggr, 
-            #     return_orientation=use_orientation, num_bins=num_bins, return_distance=use_distance)
+            # TODO: Implement Relational Graph
+            pass
 
         # Caption generation
         if not no_caption:
@@ -121,7 +117,6 @@ class CapNet(nn.Module):
                 self.caption = AttentionCapModule(128,emb_size,hidden_size,use_relation) #(vocabulary, embeddings, emb_size, 128, 
                     #hidden_size, num_proposal, num_locals, query_mode, use_relation)
             else:
-                #self.caption = PlainCapModule(128,emb_size,hidden_size)  
                 self.caption = SceneCaptionModule(vocabulary, embeddings, emb_size, 128, hidden_size, num_proposal)
 
     def forward(self, data_dict, epoch=1, use_tf=True, is_eval=False):
@@ -158,7 +153,8 @@ class CapNet(nn.Module):
         #######################################
 
         if self.num_graph_steps > 0 and epoch > self.prepare_epochs: 
-            data_dict = self.graph(data_dict)
+            # TODO: Implement Relational Graph
+            pass
 
         #######################################
         #                                     #

@@ -7,11 +7,8 @@ import os
 import sys
 import h5py
 import torch
-import torch.nn as nn
 import argparse
 import numpy as np
-from tqdm import tqdm
-from plyfile import PlyData, PlyElement
 import math
 from imageio import imread
 from PIL import Image

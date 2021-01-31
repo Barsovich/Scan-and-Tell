@@ -12,17 +12,8 @@ import os
 import sys
 import json
 import torch
-import pickle
-import argparse
-import time
-
 import numpy as np
-
 from tqdm import tqdm
-from copy import deepcopy
-from torch.utils.data import DataLoader
-from numpy.linalg import inv
-from lib.pointgroup_ops.functions import pointgroup_ops
 
 sys.path.append(os.path.join(os.getcwd())) # HACK add the root folder
 
@@ -33,13 +24,10 @@ import lib.capeval.meteor.meteor as capmeteor
 
 from data.scannet.model_util_scannet import ScannetDatasetConfig
 from config.config_votenet import CONF
-#from utils.nn_distance import nn_distance, huber_loss
 from lib.ap_helper import parse_predictions
-from lib.loss import SoftmaxRankingLoss
 from utils.box_util import box3d_iou, box3d_iou_batch_tensor
 import utils.utils_pointgroup as utils_pointgroup
 from lib.loss_helper import get_scene_cap_loss, get_pointgroup_cap_loss
-import utils.pointgroup.eval as pg_eval
 from utils.eval_det import get_iou
 import lib.ap_helper as ap_helper
 
@@ -526,10 +514,6 @@ def feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,no_detection=False,mi
                 labels = data_dict['labels']                      # (N), long, cuda
                 gt_cluster_count = instance_pointnum.shape[0]
 
-                # ious = pointgroup_ops.get_iou(proposals_idx[:, 1].cuda(), proposals_offset.cuda(), instance_labels,
-                #                              instance_pointnum)  # (nProposal, nInstance), float
-                # gt_ious, gt_instance_idxs = ious.max(1)  # (nProposal) float, long
-
                 remapped_semantic_ids = remap_semantic_ids(cluster_semantic_id)
                 pred_bboxes = ap_helper.calculate_pred_bboxes_pointgroup(coords, clusters, remapped_semantic_ids, cluster_scores)[0]
                 gt_bboxes = ap_helper.calculate_gt_bboxes_pointgroup(coords, labels, instance_labels, gt_cluster_count)[0]
@@ -547,8 +531,6 @@ def feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,no_detection=False,mi
                         ious_bbox[i, j] = get_iou(pred_bbox, gt_bbox)
                 gt_ious, gt_instance_idxs = ious_bbox.max(1)  # (nProposal) float, long
 
-                # gt_ious = gt_ious[mask][pick_idxs]
-                # gt_instance_idxs = gt_instance_idxs[mask][pick_idxs]
                 captions = captions[mask][pick_idxs]
 
                 iou_thresh_mask = gt_ious > min_iou

@@ -2,14 +2,13 @@
     Modified from https://github.com/Jia-Research-Lab/PointGroup/blob/master/data/scannetv2_inst.py
 '''
 
-import os, sys, glob, math, numpy as np
+import os, sys, math, numpy as np
 import scipy.ndimage
 import scipy.interpolate
 import torch
 import h5py
 import pickle
 import json
-import multiprocessing as mp
 
 from itertools import chain
 from collections import Counter
@@ -66,9 +65,6 @@ class Dataset:
 
     def trainLoader(self):
         train_file_names = sorted(list(set([data["scene_id"] for data in self.train_data])))
-        #self.train_file_names = list(map(lambda name: os.path.join(self.data_root,self.dataset,'{}_pointgroup.pth'.format(data)),train_file_names))
-        #train_file_names = sorted(glob.glob(os.path.join(self.data_root, self.dataset, 'train', '*' + self.filename_suffix)))
-        #self.train_files = [torch.load(i) for i in train_file_names]
 
         logger.info('Training on {} object samples from {} scenes.'.format(len(self.train_data),len(train_file_names)))
 
@@ -79,10 +75,6 @@ class Dataset:
 
     def valLoader(self):
         self.val_file_names = sorted(list(set([data["scene_id"] for data in self.val_data])))
-        #self.val_file_names = list(map(lambda data: os.path.join(self.data_root,self.dataset,'{}_pointgroup.pth'.format(data[' scene_id'])),val_file_names))
-        # val_file_names = sorted(glob.glob(os.path.join(self.data_root, self.dataset, 'val', '*' + self.filename_suffix)))
-        #self.val_files = [torch.load(i) for i in val_file_names]
-
         logger.info('Validation on {} object samples from {} scenes.'.format(len(self.val_data),len(self.val_file_names)))
 
         val_set = list(range(len(self.val_data)))
@@ -93,7 +85,6 @@ class Dataset:
     def testLoader(self):
         self.test_file_names = sorted([line.rstrip() for line in open(os.path.join(self.data_root,'meta_data/scannetv2_test.txt'))])
         self.test_file_names = list(map(lambda name: os.path.join(self.data_root,self.dataset,'{}_pointgroup.pth'.format(name)),self.test_file_names))
-        #self.test_file_names = sorted(glob.glob(os.path.join(self.data_root, self.dataset, self.test_split, '*' + self.filename_suffix)))
         self.test_files = [torch.load(i) for i in self.test_file_names]
 
         logger.info('Testing samples ({}): {}'.format(self.test_split, len(self.test_files)))
@@ -288,11 +279,6 @@ class Dataset:
 
             word_count = Counter(all_tokens)
             word_count = sorted([(k, v) for k, v in word_count.items()], key=lambda x: x[0])
-            
-            # frequencies = [c for _, c in word_count]
-            # weights = np.array(frequencies).astype(float)
-            # weights = weights / np.sum(weights)
-            # weights = 1 / np.log(1.05 + weights)
 
             weights = np.ones((len(word_count)))
 
@@ -360,11 +346,9 @@ class Dataset:
             xyz -= xyz.min(0)
 
             ### crop
-            # xyz, valid_idxs = self.crop(xyz)
             xyz, valid_idxs = random_sampling(xyz, self.max_npoint, return_choices=True)
 
             xyz_middle = xyz_middle[valid_idxs]
-            # xyz = xyz[valid_idxs]
             rgb = rgb[valid_idxs]
             label = label[valid_idxs]
             instance_label = self.getCroppedInstLabel(instance_label, valid_idxs)
@@ -379,7 +363,6 @@ class Dataset:
             #get target object information
             target_instance_id = object_id + total_inst_num
             target_instance_label = np.where(instance_label == target_instance_id, instance_label, -100) #only keep captioning target
-            #target_inst_pointnum = inst_pointnum[object_id]
 
             total_inst_num += inst_num
 
@@ -493,15 +476,6 @@ class Dataset:
 
             ### offset
             xyz -= xyz.min(0)
-            #
-            # ### crop
-            # xyz, valid_idxs = random_sampling(xyz, self.max_npoint, return_choices=True)
-            #
-            # xyz_middle = xyz_middle[valid_idxs]
-            # # xyz = xyz[valid_idxs]
-            # rgb = rgb[valid_idxs]
-            # label = label[valid_idxs]
-            # instance_label = self.getCroppedInstLabel(instance_label, valid_idxs)
 
             ### get instance information
             inst_num, inst_infos, _ = self.getInstanceInfo(xyz_middle, instance_label.astype(np.int32),object_id, eval=True)

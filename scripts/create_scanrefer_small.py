@@ -10,8 +10,6 @@ SCANNET_VAL_SMALL = sorted([line.rstrip() for line in open(os.path.join(CONF.PAT
 
 SCANREFER = json.load(open(os.path.join(CONF.PATH.DATA,"ScanRefer_filtered.json")))
 
-#if __name__ == '__main__':
-    
 train_small = []
 val_small = []
 

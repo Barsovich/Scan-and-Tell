@@ -6,7 +6,6 @@
 
 import os
 import sys
-import h5py
 import math
 import argparse
 import torch

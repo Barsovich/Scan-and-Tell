@@ -72,22 +72,6 @@ def get_eval_data(cfg):
 def test_detection(model, dataloader, epoch, val_scene_list):
     logger.info('>>>>>>>>>>>>>>>> Start Evaluation >>>>>>>>>>>>>>>>')
 
-    # scanrefer_train, scanrefer_val, all_scene_list = get_scanrefer(SCANREFER_TRAIN, SCANREFER_VAL, -1)
-    # scanrefer = {
-    #     "train": scanrefer_train,
-    #     "val": scanrefer_val
-    # }
-
-    # if cfg.dataset == 'scannet_data':
-    #     if data_name == 'scannet':
-    #         from data.dataset_pointgroup import Dataset
-    #         dataset = Dataset(scanrefer=scanrefer)
-    #         dataset.valLoader()
-    #     else:
-    #         print("Error: no data loader - " + data_name)
-    #         exit(0)
-    # dataloader = dataset.val_data_loader
-
     with torch.no_grad():
         model = model.eval()
         start = time.time()
@@ -107,7 +91,6 @@ def test_detection(model, dataloader, epoch, val_scene_list):
                     pass
 
             N = data_dict['feats'].shape[0]
-            #test_scene_name = dataset.val_file_names[int(batch['id'][0])].split('/')[-1][:12]
             test_scene_name = val_scene_list[data_dict['id'][0]]
             start1 = time.time()
             data_dict = model(data_dict, epoch, is_eval=True)
@@ -279,8 +262,6 @@ if __name__ == '__main__':
 
     if model_name == 'pointgroup':
         from models.capnet import CapNet
-        #from models.pointgroup import PointGroup as Network
-        #from models.pointgroup import model_fn_decorator
     else:
         print("Error: no model - " + model_name)
         exit(0)
@@ -294,7 +275,6 @@ if __name__ == '__main__':
             }
             import data.dataset_pointgroup
             dataset = data.dataset_pointgroup.Dataset(scanrefer)
-            #dataset.trainLoader()
             dataset.valLoader()
         else:
             print("Error: no data loader - " + data_name)
@@ -303,7 +283,6 @@ if __name__ == '__main__':
     dataloader = dataset.val_data_loader
     vocabulary = dataset.vocabulary
     embeddings = dataset.glove
-    #val_scene_list = all_scene_list[-312:]
 
     model = CapNet(vocabulary, embeddings, cfg, 'pointgroup',no_caption=cfg.no_caption,prepare_epochs=cfg.prepare_epochs)
 
@@ -315,9 +294,6 @@ if __name__ == '__main__':
     # logger.info(model)
     logger.info('#classifier parameters (model): {}'.format(sum([x.nelement() for x in model.parameters()])))
 
-    ##### model_fn (criterion)
-    #model_fn = model_fn_decorator(test=True)
-
     ##### load model
     utils.checkpoint_restore(model, cfg.exp_path, cfg.config.split('/')[-1][:-5], use_cuda, cfg.test_epoch, strict=False, dist=False, f=cfg.pretrain)      # resume from the latest epoch, or specify the epoch to restore
 
@@ -326,5 +302,3 @@ if __name__ == '__main__':
         test_detection(model, dataloader, cfg.test_epoch, val_scene_list)
     else:
         test_caption(model,dataloader,cfg.test_epoch,val_scene_list)
-
-
