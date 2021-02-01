@@ -191,7 +191,7 @@ class GraphModule(nn.Module):
                       overlay_threshold=CONF.TRAIN.OVERLAID_THRESHOLD):
         corners = data_dict["bbox_corner"]  # batch_size, num_proposals, 8, 3
         centers = self._get_bbox_centers(corners)  # batch_size, num_proposals, 3
-        batch_size, _, _ = centers.shape
+        batch_size, num_proposals, _ = centers.shape
 
         # decode target box info
         target_centers = torch.gather(centers, 1, target_ids.view(-1, 1, 1).repeat(1, 1, 3))  # batch_size, 1, 3
@@ -212,14 +212,13 @@ class GraphModule(nn.Module):
 
         # exclude overlaid boxes
         tar2neigbor_iou = box3d_iou_batch_tensor(
-            target_corners.repeat(1, self.num_proposals, 1, 1).view(-1, 8, 3), corners.view(-1, 8, 3)).view(batch_size,
-                                                                                                            self.num_proposals)  # batch_size, num_proposals
+            target_corners.repeat(1, num_proposals, 1, 1).view(-1, 8, 3), corners.view(-1, 8, 3)).view(batch_size,
+                                                                                                            num_proposals)  # batch_size, num_proposals
         overlaid_masks = tar2neigbor_iou >= overlay_threshold
         pc_dist.masked_fill_(overlaid_masks, float('1e30'))  # distance to overlaid objects: infinity
-
         # include the target objects themselves
         self_dist = 0 if include_self else float('1e30')
-        self_masks = torch.zeros(batch_size, self.num_proposals).cuda()
+        self_masks = torch.zeros(batch_size, num_proposals).cuda()
         self_masks.scatter_(1, target_ids.view(-1, 1), 1)
         pc_dist.masked_fill_(self_masks == 1, self_dist)  # distance to themselves: 0 or infinity
 
@@ -227,7 +226,7 @@ class GraphModule(nn.Module):
         _, topk_ids = torch.topk(pc_dist, self.num_locals, largest=False, dim=1)  # batch_size, num_locals
 
         # construct masks for the local context
-        local_masks = torch.zeros(batch_size, self.num_proposals).cuda()
+        local_masks = torch.zeros(batch_size, num_proposals).cuda()
         local_masks.scatter_(1, topk_ids, 1)
 
         return local_masks
@@ -333,7 +332,7 @@ class GraphModule(nn.Module):
         data_dict["num_edge_target"] = num_targets
         data_dict["edge_orientations"] = edge_preds[:, :, :-1]
         data_dict["edge_distances"] = edge_preds[:, :, -1]
-
+        import pdb; pdb.set_trace()
         if self.backbone == 'pointgroup':
             data_dict['proposal_feature'] = new_obj_feats[object_masks] # Concat the proposals back again
         return data_dict

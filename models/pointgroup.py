@@ -407,57 +407,54 @@ class PointGroup(nn.Module):
             data_dict['proposal_scores'] = (scores, proposals_idx, proposals_offset)
             data_dict['proposal_feature'] = object_feats
 
-            import pdb; pdb.set_trace()
-
             def get_batch(largest_point_idx):
-                for batch_offset in batch_offsets:
+                for i, batch_offset in enumerate(batch_offsets):
                     if largest_point_idx < batch_offset:
-                        return batch_offset.item() - 1
+                        return i - 1
                 assert False, f"Largest_point_idx {largest_point_idx} should be less than largest batch offset {batch_offsets[-1]}."
 
             # Calculate bbox corners
             cluster_mask = proposals_idx[:, 0]
             cluster_count = scores.shape[0]
             batch_size = batch_offsets_.size(0) - 1
-            corners = torch.zeros(cluster_count, 8, 3)
-            cluster_batch_idx = torch.zeros(cluster_count)
-            batch_proposal_counts = torch.zeros(batch_size)
+            corners = torch.zeros(cluster_count, 8, 3).cuda()
+            cluster_batch_idx = torch.zeros(cluster_count,dtype=torch.long)
+            batch_proposal_counts = torch.zeros(batch_size, dtype=torch.long)
             for i in range(cluster_count):
                 point_idxs_in_cluster = proposals_idx[cluster_mask == i][:, 1]
-                cluster_batch_idx[i] = get_batch(largest_point_idx=point_idxs_in_cluster.max(0)[0].item())
+                cluster_batch_idx[i] = get_batch(largest_point_idx=point_idxs_in_cluster.max().item())
                 batch_proposal_counts[cluster_batch_idx[i]] += 1
-                point_coords_in_cluster = coords_[point_idxs_in_cluster]
-                mins = point_coords_in_cluster.min(0)[1]
-                maxs = point_coords_in_cluster.max(0)[1]
-                bbox_coords = torch.cat(tensors=(mins, maxs), dim=1)
+                point_coords_in_cluster = coords_[point_idxs_in_cluster.long()]
+                mins = point_coords_in_cluster.min(0)[0]
+                maxs = point_coords_in_cluster.max(0)[0]
+                bbox_coords = torch.stack(tensors=(mins, maxs))
                 for j in range(2):
                     for k in range(2):
                         for l in range(2):
-                            corners[i, 4 * j + 2 * k + l, :] = torch.tensor([bbox_coords[0, j], bbox_coords[1, k], bbox_coords[2, l]])
+                            corners[i, 4 * j + 2 * k + l, :] = torch.tensor([bbox_coords[j, 0], bbox_coords[k, 1], bbox_coords[l, 2]])
 
             # Separate clusters into their corresponding batches
             max_proposal_count = batch_proposal_counts.max(0)[0].item()
-            bbox_corner = torch.zeros(batch_size, max_proposal_count, 8, 3)
-            batch_proposal_counts_current = torch.zeros(batch_size)
+            bbox_corner = torch.zeros(batch_size, max_proposal_count, 8, 3).cuda()
+            batch_proposal_counts_current = torch.zeros(batch_size, dtype=torch.long)
             for i, corner_set in enumerate(corners):
                 batch_idx = cluster_batch_idx[i]
                 bbox_corner[batch_idx, batch_proposal_counts_current[batch_idx]] = corner_set
                 batch_proposal_counts_current[batch_idx] += 1
 
             # Calculate bbox_mask
-            bbox_mask = torch.zeros(batch_size, max_proposal_count)
+            bbox_mask = torch.zeros(batch_size, max_proposal_count, dtype=torch.bool).cuda()
             for i in range(batch_size):
                 bbox_mask[i, 0:batch_proposal_counts[i]] = 1
 
             # Separate cluster features into different batches
             max_proposal_count = batch_proposal_counts.max(0)[0].item()
-            bbox_feature = torch.zeros(batch_size, max_proposal_count, object_feats.shape[-1])
-            batch_proposal_counts_current = torch.zeros(batch_size)
+            bbox_feature = torch.zeros(batch_size, max_proposal_count, object_feats.shape[-1]).cuda()
+            batch_proposal_counts_current = torch.zeros(batch_size, dtype=torch.long)
             for i, object_feat in enumerate(object_feats):
                 batch_idx = cluster_batch_idx[i]
                 bbox_feature[batch_idx, batch_proposal_counts_current[batch_idx]] = object_feat
                 batch_proposal_counts_current[batch_idx] += 1
-
             data_dict["bbox_corner"] = bbox_corner
             data_dict["bbox_mask"] = bbox_mask
             data_dict["bbox_feature"] = bbox_feature
