@@ -80,7 +80,7 @@ For downloading the ScanRefer dataset, please fill out [this form](https://forms
 > Note: In addition to language annotations in ScanRefer dataset, you also need to access the original ScanNet dataset. Please refer to the [ScanNet Instructions](data/scannet/README.md) for more details.
 
 Download the dataset by simply executing the wget command:
-```shell
+```
 wget <download_link>
 ```
 
@@ -90,10 +90,10 @@ wget <download_link>
 2. Download the preprocessed [GLoVE embeddings (~990MB)](http://kaldir.vc.in.tum.de/glove.p) and put them under `data/`.
 3. Download the ScanNetV2 dataset and put (or link) `scans/` under (or to) `data/scannet/scans/` (Please follow the [ScanNet Instructions](data/scannet/README.md) for downloading the ScanNet dataset).
 > After this step, there should be folders containing the ScanNet scene data under the `data/scannet/scans/` with names like `scene0000_00`
-4. Pre-process ScanNet data. A folder named `scannet_data/` will be generated under `data/scannet/` after running the following command. Roughly 3.8GB free space is needed for this step:
-```shell
+4. Pre-process ScanNet data. A folder named `scannet_data/` will be generated under `data/scannet/` after running the following command. Depending on the backbone you would like to use, set the model to `votenet` or `pointgroup`. You can also do both.
+```
 cd data/scannet/
-python batch_load_scannet_data.py
+python batch_load_scannet_data.py --model <model>
 ```
 5. Pre-process the multiview features from ENet. 
 
@@ -116,3 +116,34 @@ python batch_load_scannet_data.py
     > ```shell
     > python script/project_multiview_labels.py --scene_id scene0000_00 --maxpool
     > ```
+## Usage
+### Training
+#### PointGroup backbone
+1. (Optional) Configure the desired settings in `config/pointgroup_run1_scannet.yaml`
+2. Run the training script
+```shell
+python train_pointgroup.py --config config/pointgroup_run1_scannet.yaml
+```
+#### VoteNet backbone
+1. (Optional) Configure the desired settings in `config/votenet_args.yaml`
+2. Run the training script
+```shell
+python train_votenet.py --config config/votenet_args.yaml
+```
+### Evaluation
+#### PointGroup backbone
+1. (Optional) Configure the desired settings in `config/pointgroup_run1_scannet.yaml`
+2. Run the training script
+```shell
+python eval_pointgroup.py --config config/pointgroup_run1_scannet.yaml
+```
+If you use the same configuration file as the config parameter, it will automatically resume the training from the last saved checkpoint.
+#### VoteNet backbone
+1. (Optional) Configure the desired settings in `config/votenet_eval_args.yaml`
+2. Run the training script
+```shell
+python eval_votenet.py --config config/votenet_eval_args.yaml
+```
+
+## Acknowledgement
+This repository uses the PointGroup implementation from https://github.com/Jia-Research-Lab/PointGroup and the VoteNet implementation from https://github.com/daveredrum/ScanRefer. We would like to thank Dave Z. Chen and Jia-Research-Lab for their implementations.
