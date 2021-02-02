@@ -418,7 +418,6 @@ class PointGroup(nn.Module):
             cluster_count = scores.shape[0]
             batch_size = batch_offsets_.size(0) - 1
             corners = torch.zeros(cluster_count, 8, 3).cuda()
-            centers = torch.zeros(cluster_count, 8, 3).cuda()
             cluster_batch_idx = torch.zeros(cluster_count,dtype=torch.long)
             batch_proposal_counts = torch.zeros(batch_size, dtype=torch.long)
             for i in range(cluster_count):
@@ -433,17 +432,14 @@ class PointGroup(nn.Module):
                     for k in range(2):
                         for l in range(2):
                             corners[i, 4 * j + 2 * k + l, :] = torch.tensor([bbox_coords[j, 0], bbox_coords[k, 1], bbox_coords[l, 2]])
-                centers[i] = (mins + maxs) / 2
 
             # Separate clusters into their corresponding batches
             max_proposal_count = batch_proposal_counts.max(0)[0].item()
             bbox_corner = torch.zeros(batch_size, max_proposal_count, 8, 3).cuda()
-            bbox_center = torch.zeros(batch_size, max_proposal_count, 3).cuda()
             batch_proposal_counts_current = torch.zeros(batch_size, dtype=torch.long)
             for i, corner_set in enumerate(corners):
                 batch_idx = cluster_batch_idx[i]
                 bbox_corner[batch_idx, batch_proposal_counts_current[batch_idx]] = corner_set
-                bbox_center[batch_idx, batch_proposal_counts_current[batch_idx]] = centers[i]
                 batch_proposal_counts_current[batch_idx] += 1
 
             # Calculate bbox_mask
@@ -467,7 +463,6 @@ class PointGroup(nn.Module):
                 bbox_feature[batch_idx, batch_proposal_counts_current[batch_idx]] = object_feat
                 batch_proposal_counts_current[batch_idx] += 1
             data_dict["bbox_corner"] = bbox_corner
-            data_dict["bbox_centers"] = bbox_center
             data_dict["bbox_mask"] = bbox_mask
             data_dict["bbox_feature"] = bbox_feature
         return data_dict

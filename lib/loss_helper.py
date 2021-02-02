@@ -380,8 +380,6 @@ def get_pointgroup_cap_loss(data_dict, cfg, epoch,detection=True, caption=False,
         loss_dict['offset_dir_loss'] = (torch.zeros(1).cuda(),1)
         loss_dict['score_loss'] = (torch.zeros(1).cuda(),1)
 
-    if distance:
-        loss_dict['node_distance_loss'] = compute_node_distance_loss(data_dict, 'pointgroup')
 
     if caption:
         if epoch > cfg.prepare_epochs:
@@ -406,8 +404,6 @@ def get_pointgroup_cap_loss(data_dict, cfg, epoch,detection=True, caption=False,
         loss += (1.25 * loss_dict['score_loss'][0])
         if caption:
             loss += loss_dict['cap_loss'][0]
-        if distance:
-            loss += 0.1 * loss_dict['node_distance_loss'][0]
 
     #prepare for summarywriter
     with torch.no_grad():
