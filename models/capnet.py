@@ -105,7 +105,6 @@ class CapNet(nn.Module):
         if use_relation: assert use_topdown # only enable use_relation in topdown captioning module
 
         if num_graph_steps > 0:
-            # self.graph = GraphModule(128,num_graph_steps)
             self.graph = GraphModule(128, 128, num_graph_steps, num_proposal, 128, num_locals,
                 query_mode, graph_mode, return_edge=use_relation, graph_aggr=graph_aggr,
                 return_orientation=use_orientation, num_bins=num_bins, return_distance=use_distance, backbone=self.detection_backbone)

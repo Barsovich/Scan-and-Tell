@@ -122,7 +122,7 @@ def train_epoch(train_loader, model, optimizer, epoch):
 
         ##### loss calculation
         loss, loss_dict, visual_dict, meter_dict = get_pointgroup_cap_loss(data_dict,cfg,epoch,
-            not cfg.no_detection, not cfg.no_caption)
+            not cfg.no_detection, not cfg.no_caption, cfg.use_distance)
 
         ##### meter_dict
         for k, v in meter_dict.items():

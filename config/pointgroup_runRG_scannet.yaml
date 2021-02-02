@@ -29,12 +29,12 @@ STRUCTURE:
   use_multiview: True
   no_detection: False
   no_caption: False
-  use_distance: False
+  use_distance: True
   TRAIN_MAX_DES_LEN: 30
 
 
 TRAIN:
-  epochs: 15
+  epochs: 16
   train_workers: 4 # data loader workers
   optim: Adam # Adam or SGD
   lr: 0.001
@@ -63,11 +63,11 @@ GROUP:
   cluster_shift_meanActive: 300
   cluster_npoint_thre: 30
 
-  prepare_epochs: 3
+  prepare_epochs: 0
 
 TEST:
   split: val
-  test_epoch: 25
+  test_epoch: 15
   test_workers: 4
   test_seed: 567
 

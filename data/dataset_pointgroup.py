@@ -374,8 +374,8 @@ class Dataset:
 
 
             num_objects = np.unique(instance_label[instance_label != -100]).shape[0]
-            centers = np.zeros(num_objects,3)
-            for i in num_objects:
+            centers = np.zeros((num_objects,3))
+            for i in range(num_objects):
                 obj_id = np.unique(instance_label[instance_label != -100])[i]
                 obj_locs = xyz_middle[instance_label == obj_id]
                 obj_mins = np.min(obj_locs,axis=0)
