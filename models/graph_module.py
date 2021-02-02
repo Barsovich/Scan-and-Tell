@@ -318,11 +318,9 @@ class GraphModule(nn.Module):
                     print("error occurs when dealing with graph, skipping...")
 
             # skip connection
-            batch_obj_feats += node_feat
+            batch_obj_feats = batch_obj_feats + node_feat
             new_obj_feats[batch_id, batch_object_masks == 1] = batch_obj_feats
-
-
-
+            new_obj_feats[batch_id, batch_object_masks == 0] = obj_feats[batch_id, batch_object_masks == 0]
         # store
         data_dict["bbox_feature"] = new_obj_feats
         data_dict["adjacent_mat"] = adjacent_mat
@@ -332,7 +330,6 @@ class GraphModule(nn.Module):
         data_dict["num_edge_target"] = num_targets
         data_dict["edge_orientations"] = edge_preds[:, :, :-1]
         data_dict["edge_distances"] = edge_preds[:, :, -1]
-        import pdb; pdb.set_trace()
         if self.backbone == 'pointgroup':
             data_dict['proposal_feature'] = new_obj_feats[object_masks] # Concat the proposals back again
         return data_dict

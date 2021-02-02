@@ -188,9 +188,14 @@ def compute_box_and_sem_cls_loss(data_dict, config):
 
     return center_loss, heading_class_loss, heading_residual_normalized_loss, size_class_loss, size_residual_normalized_loss, sem_cls_loss
 
-def compute_node_distance_loss(data_dict):
+def compute_node_distance_loss(data_dict, backbone):
     gt_center = data_dict["center_label"][:,:,0:3]
-    object_assignment = data_dict["object_assignment"]
+    pred_center = data_dict["bbox_centers"]
+
+    if backbone == 'pointgroup':
+        _, object_assignment, _, _ = nn_distance(pred_center, gt_center)
+    else:
+        object_assignment = data_dict["object_assignment"]
     
     gt_center = torch.gather(gt_center, 1, object_assignment.unsqueeze(-1).repeat(1, 1, 3))
     batch_size, _, _ = gt_center.shape

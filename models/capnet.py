@@ -71,7 +71,7 @@ class CapNet(nn.Module):
     num_heading_bin = DC.num_heading_bin, num_size_cluster = DC.num_size_cluster, mean_size_arr = DC.mean_size_arr, 
     input_feature_dim=0, num_proposal=256, num_locals=5, vote_factor=1, sampling="vote_fps",
     no_caption=True, use_topdown=False, query_mode="corner", 
-    graph_mode="graph_conv", num_graph_steps=1, use_relation=False, graph_aggr="add",
+    graph_mode="graph_conv", num_graph_steps=0, use_relation=False, graph_aggr="add",
     use_orientation=False, num_bins=6, use_distance=False, use_new=False, prepare_epochs=0,
     emb_size=300, hidden_size=512):
         super().__init__()
