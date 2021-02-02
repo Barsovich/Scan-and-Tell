@@ -320,6 +320,8 @@ class Dataset:
         object_ids = []
         object_classes = []
 
+        batch_centers = []
+
         batch_offsets = [0]
 
         total_inst_num = 0
@@ -370,6 +372,18 @@ class Dataset:
             inst_info = inst_infos["instance_info"]  # (n, 9), (cx, cy, cz, minx, miny, minz, maxx, maxy, maxz)
             inst_pointnum = inst_infos["instance_pointnum"]   # (nInst), list
 
+
+            num_objects = np.unique(instance_label[instance_label != -100]).shape[0]
+            centers = np.zeros(num_objects,3)
+            for i in num_objects:
+                obj_id = np.unique(instance_label[instance_label != -100])[i]
+                obj_locs = xyz_middle[instance_label == obj_id]
+                obj_mins = np.min(obj_locs,axis=0)
+                obj_maxs = np.max(obj_locs,axis=0)
+                obj_center = (obj_maxs + obj_mins) / 2 
+                centers[i] = obj_center
+
+
             instance_label[np.where(instance_label != -100)] += total_inst_num
 
             #get target object information
@@ -407,6 +421,8 @@ class Dataset:
             lang_lens.append(lang_len)
             lang_ids.append(torch.from_numpy(self.lang_ids[scene_id][str(object_id)][ann_id]).unsqueeze(0))
 
+            batch_centers.append(torch.from_numpy(centers))
+
         ### merge all the scenes in the batchd
         ann_ids = torch.tensor(ann_ids, dtype=torch.long)
         object_ids = torch.tensor(object_ids, dtype=torch.long)
@@ -429,6 +445,8 @@ class Dataset:
         lang_lens = torch.tensor(lang_lens,dtype=torch.long)
         lang_ids = torch.cat(lang_ids,0).to(torch.long)
 
+        gt_centers = torch.nn.utils.rnn.pad_sequence(batch_centers,batch_first=True).to(torch.float32)
+
         spatial_shape = np.clip((locs.max(0)[0][1:] + 1).numpy(), self.full_scale[0], None)     # long (3)
 
         ### voxelize
@@ -436,7 +454,7 @@ class Dataset:
 
         return {'locs': locs, 'voxel_locs': voxel_locs, 'p2v_map': p2v_map, 'v2p_map': v2p_map,
                 'locs_float': locs_float, 'feats': feats, 'labels': labels, 'instance_labels': instance_labels,
-                'instance_info': instance_infos, 'instance_pointnum': instance_pointnum,
+                'instance_info': instance_infos, 'instance_pointnum': instance_pointnum, 'center_label': gt_centers,
                 'target_instance_labels': target_instance_labels, 'target_instance_pointnum': target_instance_pointnum,
                 'id': id, 'offsets': batch_offsets, 'spatial_shape': spatial_shape, 
                 'lang_feat': lang_feats, 'lang_len': lang_lens, 'lang_ids': lang_ids, 

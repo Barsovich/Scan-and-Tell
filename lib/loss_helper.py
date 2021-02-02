@@ -188,6 +188,49 @@ def compute_box_and_sem_cls_loss(data_dict, config):
 
     return center_loss, heading_class_loss, heading_residual_normalized_loss, size_class_loss, size_residual_normalized_loss, sem_cls_loss
 
+def compute_node_distance_loss(data_dict):
+    gt_center = data_dict["center_label"][:,:,0:3]
+    object_assignment = data_dict["object_assignment"]
+    
+    gt_center = torch.gather(gt_center, 1, object_assignment.unsqueeze(-1).repeat(1, 1, 3))
+    batch_size, _, _ = gt_center.shape
+
+    edge_indices = data_dict["edge_index"]
+    edge_preds = data_dict["edge_distances"]
+    num_sources = data_dict["num_edge_source"]
+    num_targets = data_dict["num_edge_target"]
+
+    preds = []
+    labels = []
+    for batch_id in range(batch_size):
+        batch_gt_center = gt_center[batch_id]
+
+        batch_num_sources = num_sources[batch_id]
+        batch_num_targets = num_targets[batch_id]
+        batch_edge_indices = edge_indices[batch_id, :batch_num_sources * batch_num_targets]
+
+        source_indices = edge_indices[batch_id, 0, :batch_num_sources*batch_num_targets].long()
+        target_indices = edge_indices[batch_id, 1, :batch_num_sources*batch_num_targets].long()
+
+        source_centers = torch.index_select(batch_gt_center, 0, source_indices)
+        target_centers = torch.index_select(batch_gt_center, 0, target_indices)
+
+        batch_edge_labels = torch.norm(source_centers - target_centers, dim=1)
+        batch_edge_preds = edge_preds[batch_id, :batch_num_sources * batch_num_targets]
+
+        preds.append(batch_edge_preds)
+        labels.append(batch_edge_labels)
+
+    # aggregate
+    preds = torch.cat(preds, dim=0)
+    labels = torch.cat(labels, dim=0)
+
+    criterion = nn.MSELoss()
+    loss = criterion(preds, labels)
+
+    return loss
+
+
 def compute_cap_loss(data_dict, config, weights):
     """ Compute cluster caption loss
 
