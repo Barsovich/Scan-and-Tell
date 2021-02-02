@@ -29,7 +29,6 @@ STRUCTURE:
   use_multiview: True
   no_detection: False
   no_caption: False
-  use_distance: True
   TRAIN_MAX_DES_LEN: 30
 
 
