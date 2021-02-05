@@ -1,3 +1,8 @@
+'''
+	Modified from: https://github.com/daveredrum/ScanRefer/blob/master/lib/config.py
+
+'''
+
 import os
 import sys
 from easydict import EasyDict

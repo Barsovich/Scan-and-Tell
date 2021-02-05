@@ -6,10 +6,8 @@ import numpy as np
 import sys
 import os
 
-#sys.path.append(os.path.join(os.getcwd(), os.pardir, "lib")) # HACK add the lib folder
 sys.path.append('../../')
 from config.config_votenet import CONF
-from utils.box_util import get_3d_box
 
 def in_hull(p, hull):
     from scipy.spatial import Delaunay

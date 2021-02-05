@@ -1,3 +1,9 @@
+'''
+    Modified from: https://github.com/daveredrum/ScanRefer/blob/master/scripts/compute_multiview_features.py
+
+'''
+
+
 import os
 import sys
 import math

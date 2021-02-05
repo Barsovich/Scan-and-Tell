@@ -5,11 +5,8 @@ Load Scannet scenes with vertices and ground truth labels for semantic and insta
 """
 
 # python imports
-import math
-import os, sys, argparse
-import inspect
+import os, argparse
 import json
-import pdb
 import numpy as np
 import scannet_utils
 

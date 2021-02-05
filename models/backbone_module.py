@@ -1,9 +1,11 @@
+'''
+    Modified from: https://github.com/daveredrum/ScanRefer/blob/master/models/backbone_module.py
+
+'''
+
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
 import sys
-import os
 
 sys.path.append('../') # HACK add the root folder
 from lib.pointnet2.pointnet2_modules import PointnetSAModuleVotes, PointnetFPModule

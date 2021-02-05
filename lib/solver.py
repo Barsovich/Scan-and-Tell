@@ -1,8 +1,7 @@
 '''
-File Created: Monday, 25th November 2019 1:35:30 pm
-Author: Dave Zhenyu Chen (zhenyu.chen@tum.de)
-'''
+    Modified from: https://github.com/daveredrum/ScanRefer/blob/master/lib/solver.py
 
+'''
 import os
 import sys
 import time
@@ -199,33 +198,6 @@ class Solver():
 
                 # feed 
                 self._feed(self.dataloader["train"], "train", epoch_id)
-
-                if(self.report_ap & ((epoch_id +1) % 5 == 0)):
-
-                    print("AP results of the epoch: {}".format(epoch_id + 1))
-
-                    sem_acc = []
-                    for data in tqdm(dataloader['eval']['val']):
-                        for key in data:
-                            data[key] = data[key].cuda()
-
-                        # feed
-                        with torch.no_grad():
-                            data = self.model(data, False, True)
-                            data = get_scene_cap_loss(data, device, DC, weights=self.dataset.weights, detection=True, caption=False)
-
-                        batch_pred_map_cls = parse_predictions(data, self.POST_DICT) 
-                        batch_gt_map_cls = parse_groundtruths(data, self.POST_DICT) 
-                        for ap_calculator in self.AP_CALCULATOR_LIST:
-                            ap_calculator.step(batch_pred_map_cls, batch_gt_map_cls)
-
-                    # aggregate object detection results and report
-                    for i, ap_calculator in enumerate(self.AP_CALCULATOR_LIST):
-                        print()
-                        print("-"*10, "iou_thresh: %f"%(self.AP_IOU_THRESHOLDS[i]), "-"*10)
-                        metrics_dict = ap_calculator.compute_metrics()
-                        for key in metrics_dict:
-                            print("eval %s: %f"%(key, metrics_dict[key]))
 
                 # save model
                 self._log("saving last models...\n")

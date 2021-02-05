@@ -1,9 +1,9 @@
 '''
+Modified from https://github.com/Jia-Research-Lab/PointGroup/blob/master/dataset/scannetv2/prepare_data_inst_gttxt.py
 Generate instance groundtruth .txt files (for evaluation)
 '''
 
 import numpy as np
-import glob
 import torch
 import os
 import sys

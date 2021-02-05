@@ -1,3 +1,6 @@
+'''
+Adapted from https://github.com/Jia-Research-Lab/PointGroup/blob/master/util/utils.py
+'''
 import torch, glob, os, numpy as np
 import sys
 sys.path.append('../')

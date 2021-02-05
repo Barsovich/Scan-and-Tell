@@ -3,7 +3,6 @@ Helper functions and class to calculate Average Precisions for 3D object detecti
 
 Modified from: https://github.com/facebookresearch/votenet/blob/master/models/ap_helper.py
 """
-import os
 import sys
 import numpy as np
 import torch
@@ -127,7 +126,7 @@ def calculate_gt_bboxes_pointgroup(coords, labels, instance_labels, gt_cluster_c
             	for j in range(num_of_gt_clusters):
             		[	
             			semantic_class -> (float), 
-            			bbox -> ([min_x, min_y, min_z, max_x, max_y, max_z]), 
+            			bbox -> ([center[0], center[1], center[2], lengths[0], lengths[1], lengths[2]]),
         			]
     """
     ground_truth = []

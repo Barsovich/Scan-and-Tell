@@ -1,4 +1,7 @@
+'''
+    Modified from: https://github.com/daveredrum/ScanRefer/blob/master/lib/dataset.py
 
+'''
 
 import os
 import sys
@@ -6,9 +9,7 @@ import time
 import h5py
 import json
 import pickle
-import random
 import numpy as np
-import multiprocessing as mp
 
 from itertools import chain
 from collections import Counter

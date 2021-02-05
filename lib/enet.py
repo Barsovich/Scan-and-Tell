@@ -1,3 +1,8 @@
+'''
+    Modified from: https://github.com/daveredrum/ScanRefer/blob/master/lib/enet.py
+
+'''
+
 import torch
 import torch.nn as nn
 

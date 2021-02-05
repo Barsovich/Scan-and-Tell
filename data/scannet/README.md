@@ -7,5 +7,6 @@ python2 download-scannet.py -o data/scannet --type _vh_clean_2.ply
 python2 download-scannet.py -o data/scannet --type _vh_clean.aggregation.json
 python2 download-scannet.py -o data/scannet --type _vh_clean_2.0.010000.segs.json
 python2 download-scannet.py -o data/scannet --type .txt
+python2 download-scannet.py -o data/scannet --type _vh_clean_2.labels.ply
+python2 download-scannet.py -o data/scannet --type .aggregation.json
 ```
-Roughly 10.6GB free space is needed on your disk.

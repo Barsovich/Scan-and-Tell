@@ -1,3 +1,8 @@
+'''
+    Modified from: https://github.com/daveredrum/ScanRefer/blob/master/utils/nms.py
+
+'''
+
 import numpy as np
 from utils.pc_utils import bbox_corner_dist_measure
 

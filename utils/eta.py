@@ -1,6 +1,6 @@
 '''
-File Created: Monday, 25th November 2019 1:35:30 pm
-Author: Dave Zhenyu Chen (zhenyu.chen@tum.de)
+    Modified from: https://github.com/daveredrum/ScanRefer/blob/master/utils/eta.py
+
 '''
 
 def get_eta(start, end, extra, num_left):

@@ -1,3 +1,9 @@
+
+'''
+    Modified from: https://github.com/daveredrum/ScanRefer/blob/master/lib/loss_helper.py
+
+'''
+
 # Copyright (c) Facebook, Inc. and its affiliates.
 # 
 # This source code is licensed under the MIT license found in the
@@ -11,9 +17,6 @@ import os
 
 sys.path.append(os.path.join(os.getcwd())) # HACK add the root folder
 from utils.nn_distance import nn_distance, huber_loss
-from lib.ap_helper import parse_predictions
-from lib.loss import SoftmaxRankingLoss
-from utils.box_util import get_3d_box, get_3d_box_batch, box3d_iou, box3d_iou_batch
 from config.config_votenet import CONF
 from lib.pointgroup_ops.functions import pointgroup_ops
 

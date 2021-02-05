@@ -1,3 +1,9 @@
+'''
+    Modified from: https://github.com/daveredrum/ScanRefer/blob/master/scripts/eval.py
+
+'''
+
+
 import os
 import sys
 import json
@@ -16,15 +22,10 @@ from copy import deepcopy
 
 sys.path.append(os.path.join(os.getcwd())) # HACK add the root folder
 
-import lib.capeval.bleu.bleu as capblue
-import lib.capeval.cider.cider as capcider
-import lib.capeval.rouge.rouge as caprouge
-
 from data.scannet.model_util_scannet import ScannetDatasetConfig
 from config.config_votenet import CONF
 from config.config_pointgroup import cfg as args
 from data.dataset_votenet import ScannetReferenceDataset
-from lib.solver import Solver
 from lib.ap_helper import APCalculator, parse_predictions, parse_groundtruths
 from lib.loss_helper import get_scene_cap_loss
 from lib.eval_helper import eval_cap
@@ -196,30 +197,6 @@ def eval_detection(args):
 
 
 if __name__ == "__main__":
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument("--folder", type=str, help="Folder containing the model")
-    # parser.add_argument("--gpu", type=str, help="gpu", default="0")
-    # parser.add_argument("--batch_size", type=int, help="batch size", default=8)
-    # parser.add_argument("--num_points", type=int, default=40000, help="Point Number [default: 40000]")
-    # parser.add_argument("--num_proposals", type=int, default=256, help="Proposal number [default: 256]")
-    # parser.add_argument("--num_scenes", type=int, default=-1, help="Number of scenes [default: -1]")
-    # parser.add_argument("--force", action="store_true", help="enforce the generation of results")
-    # parser.add_argument("--seed", type=int, default=42, help="random seed")
-    # parser.add_argument("--repeat", type=int, default=1, help="Number of times for evaluation")
-    # parser.add_argument("--no_height", action="store_true", help="Do NOT use height signal in input.")
-    # parser.add_argument("--no_lang_cls", action="store_true", help="Do NOT use language classifier.")
-    # parser.add_argument("--no_nms", action="store_true", help="do NOT use non-maximum suppression for post-processing.")
-    # parser.add_argument("--use_color", action="store_true", help="Use RGB color in input.")
-    # parser.add_argument("--use_normal", action="store_true", help="Use RGB color in input.")
-    # parser.add_argument("--use_multiview", action="store_true", help="Use multiview images.")
-    # parser.add_argument("--use_bidir", action="store_true", help="Use bi-directional GRU.")
-    # parser.add_argument("--use_train", action="store_true", help="Use train split in evaluation.")
-    # parser.add_argument("--use_oracle", action="store_true", help="Use ground truth bounding boxes.")
-    # parser.add_argument("--use_cat_rand", action="store_true", help="Use randomly selected bounding boxes from correct categories as outputs.")
-    # parser.add_argument("--use_best", action="store_true", help="Use best bounding boxes as outputs.")
-    # parser.add_argument("--caption", action="store_true", help="evaluate the captioning results")
-    # parser.add_argument("--detection", action="store_true", help="evaluate the object detection results")
-    # args = parser.parse_args()
 
     # setting
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
@@ -234,4 +211,3 @@ if __name__ == "__main__":
     # evaluate
     if args.eval_caption: eval_caption(args)
     if args.eval_detection: eval_detection(args)
-

@@ -1,3 +1,9 @@
+
+'''
+    Modified from: https://github.com/daveredrum/ScanRefer/blob/master/lib/eval_helper.py
+
+'''
+
 # Copyright (c) Facebook, Inc. and its affiliates.
 # 
 # This source code is licensed under the MIT license found in the
@@ -6,17 +12,8 @@ import os
 import sys
 import json
 import torch
-import pickle
-import argparse
-import time
-
 import numpy as np
-
 from tqdm import tqdm
-from copy import deepcopy
-from torch.utils.data import DataLoader
-from numpy.linalg import inv
-from lib.pointgroup_ops.functions import pointgroup_ops
 
 sys.path.append(os.path.join(os.getcwd())) # HACK add the root folder
 
@@ -27,13 +24,10 @@ import lib.capeval.meteor.meteor as capmeteor
 
 from data.scannet.model_util_scannet import ScannetDatasetConfig
 from config.config_votenet import CONF
-#from utils.nn_distance import nn_distance, huber_loss
 from lib.ap_helper import parse_predictions
-from lib.loss import SoftmaxRankingLoss
 from utils.box_util import box3d_iou, box3d_iou_batch_tensor
 import utils.utils_pointgroup as utils_pointgroup
 from lib.loss_helper import get_scene_cap_loss, get_pointgroup_cap_loss
-import utils.pointgroup.eval as pg_eval
 from utils.eval_det import get_iou
 import lib.ap_helper as ap_helper
 
@@ -520,10 +514,6 @@ def feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,no_detection=False,mi
                 labels = data_dict['labels']                      # (N), long, cuda
                 gt_cluster_count = instance_pointnum.shape[0]
 
-                # ious = pointgroup_ops.get_iou(proposals_idx[:, 1].cuda(), proposals_offset.cuda(), instance_labels,
-                #                              instance_pointnum)  # (nProposal, nInstance), float
-                # gt_ious, gt_instance_idxs = ious.max(1)  # (nProposal) float, long
-
                 remapped_semantic_ids = remap_semantic_ids(cluster_semantic_id)
                 pred_bboxes = ap_helper.calculate_pred_bboxes_pointgroup(coords, clusters, remapped_semantic_ids, cluster_scores)[0]
                 gt_bboxes = ap_helper.calculate_gt_bboxes_pointgroup(coords, labels, instance_labels, gt_cluster_count)[0]
@@ -541,8 +531,6 @@ def feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,no_detection=False,mi
                         ious_bbox[i, j] = get_iou(pred_bbox, gt_bbox)
                 gt_ious, gt_instance_idxs = ious_bbox.max(1)  # (nProposal) float, long
 
-                # gt_ious = gt_ious[mask][pick_idxs]
-                # gt_instance_idxs = gt_instance_idxs[mask][pick_idxs]
                 captions = captions[mask][pick_idxs]
 
                 iou_thresh_mask = gt_ious > min_iou
@@ -565,22 +553,6 @@ def feed_pointgroup_cap(model,cfg,epoch,dataset,dataloader,no_detection=False,mi
                     except KeyError:
                         continue
     return candidates, meter_dict, visual_dict
-
-# def process_gt2pred(gt2pred):
-#     gt2predlist = []
-#     for label, gts in gt2pred.items():
-#         for gt in gts:
-#             matched_pred_id = -1 if len(gt['matched_pred']) == 0 else gt['matched_pred'][0]['pred_id'] # select the prediction with the highest confidencec
-#             gt2predlist.append((gt['instance_id'] % 1000, matched_pred_id))
-#     return gt2predlist # [(gt_id, pred_id)]
-
-# def process_pred2gt(pred2gt):
-#     pred2gt_dict = {}
-#     for label, preds in pred2gt.items():
-#         for pred in preds:
-#             matched_gt_id = -1 if len(pred['matched_gt']) == 0 else pred['matched_gt'][0]['instance_id'] % 1000 # select the prediction with the highest confidencec
-#             pred2gt_dict[pred['pred_id']] = matched_gt_id
-#     return pred2gt_dict # [(pred_id, gt_id)]
 
 def eval_cap_pointgroup(model,cfg,epoch,dataset,dataloader,no_detection=False,no_caption=False,
     force=True,max_len=CONF.TRAIN.MAX_DES_LEN,min_iou=0.25,task='train'):
@@ -670,72 +642,3 @@ def eval_cap_pointgroup(model,cfg,epoch,dataset,dataloader,no_detection=False,no
     elif task == 'eval':
         return bleu,cider,rouge,meteor
 
-
-def get_eval(data_dict, config, caption, use_lang_classifier=False, use_oracle=False, use_cat_rand=False, use_best=False, post_processing=None):
-    """ Loss functions
-
-    Args:
-        data_dict: dict
-        config: dataset config instance
-        reference: flag (False/True)
-        post_processing: config dict
-    Returns:
-        loss: pytorch scalar tensor
-        data_dict: dict
-    """
-
-    objectness_preds_batch = torch.argmax(data_dict['objectness_scores'], 2).long()
-    objectness_labels_batch = data_dict['objectness_label'].long()
-
-    if post_processing:
-        _ = parse_predictions(data_dict, post_processing)
-        nms_masks = torch.LongTensor(data_dict['pred_mask']).cuda()
-
-        # construct valid mask
-        pred_masks = (nms_masks * objectness_preds_batch == 1).float()
-        label_masks = (objectness_labels_batch == 1).float()
-    else:
-        # construct valid mask
-        pred_masks = (objectness_preds_batch == 1).float()
-        label_masks = (objectness_labels_batch == 1).float()
-
-    
-    pred_center = data_dict['center'] # (B,K,3)
-    pred_heading_class = torch.argmax(data_dict['heading_scores'], -1) # B,num_proposal
-    pred_heading_residual = torch.gather(data_dict['heading_residuals'], 2, pred_heading_class.unsqueeze(-1)) # B,num_proposal,1
-    pred_heading_class = pred_heading_class # B,num_proposal
-    pred_heading_residual = pred_heading_residual.squeeze(2) # B,num_proposal
-    pred_size_class = torch.argmax(data_dict['size_scores'], -1) # B,num_proposal
-    pred_size_residual = torch.gather(data_dict['size_residuals'], 2, pred_size_class.unsqueeze(-1).unsqueeze(-1).repeat(1,1,1,3)) # B,num_proposal,1,3
-    pred_size_class = pred_size_class
-    pred_size_residual = pred_size_residual.squeeze(2) # B,num_proposal,3
-
-    # store
-    data_dict["pred_mask"] = pred_masks
-    data_dict["label_mask"] = label_masks
-    data_dict['pred_center'] = pred_center
-    data_dict['pred_heading_class'] = pred_heading_class
-    data_dict['pred_heading_residual'] = pred_heading_residual
-    data_dict['pred_size_class'] = pred_size_class
-    data_dict['pred_size_residual'] = pred_size_residual
-
-    gt_ref = torch.argmax(data_dict["ref_box_label"], 1)
-    gt_center = data_dict['center_label'] # (B,MAX_NUM_OBJ,3)
-    gt_heading_class = data_dict['heading_class_label'] # B,K2
-    gt_heading_residual = data_dict['heading_residual_label'] # B,K2
-    gt_size_class = data_dict['size_class_label'] # B,K2
-    gt_size_residual = data_dict['size_residual_label'] # B,K2,3
-
-    
-    # --------------------------------------------
-    # Some other statistics
-    obj_pred_val = torch.argmax(data_dict['objectness_scores'], 2) # B,K
-    obj_acc = torch.sum((obj_pred_val==data_dict['objectness_label'].long()).float()*data_dict['objectness_mask'])/(torch.sum(data_dict['objectness_mask'])+1e-6)
-    data_dict['obj_acc'] = obj_acc
-    # detection semantic classification
-    sem_cls_label = torch.gather(data_dict['sem_cls_label'], 1, data_dict['object_assignment']) # select (B,K) from (B,K2)
-    sem_cls_pred = data_dict['sem_cls_scores'].argmax(-1) # (B,K)
-    sem_match = (sem_cls_label == sem_cls_pred).float()
-    data_dict["sem_acc"] = (sem_match * data_dict["pred_mask"]).sum() / data_dict["pred_mask"].sum()
-
-    return data_dict

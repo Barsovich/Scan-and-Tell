@@ -1,12 +1,14 @@
+'''
+    Modified from: https://github.com/daveredrum/ScanRefer/blob/master/scripts/project_multiview_features.py
+
+'''
+
 import os
 import sys
 import h5py
 import torch
-import torch.nn as nn
 import argparse
 import numpy as np
-from tqdm import tqdm
-from plyfile import PlyData, PlyElement
 import math
 from imageio import imread
 from PIL import Image
