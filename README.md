@@ -145,5 +145,8 @@ If you use the same configuration file as the config parameter, it will automati
 python eval_votenet.py --config config/votenet_eval_args.yaml
 ```
 
+## Branches
+The `main` should be used for all steps. The `rg` branch is currently experimental and aims to utilize a graph message passing network to further improve the results.
+
 ## Acknowledgement
 This repository uses the PointGroup implementation from https://github.com/Jia-Research-Lab/PointGroup and the VoteNet implementation from https://github.com/daveredrum/ScanRefer. We would like to thank Dave Z. Chen and Jia-Research-Lab for their implementations.
